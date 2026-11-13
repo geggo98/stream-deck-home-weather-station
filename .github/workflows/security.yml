@@ -1,0 +1,50 @@
+name: Security scan
+
+# New advisories appear without any commit, so the vulnerability gate of ci.yml would
+# only notice them on the next push. This runs the same scan on a schedule (and on
+# demand) against the committed lockfile. A failing run emails the repository owner.
+on:
+  schedule:
+    - cron: "17 5 * * 1" # Mondays 05:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  osv-scanner:
+    name: osv-scanner (lockfile) and workflow audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+            experimental-features = nix-command flakes
+
+      - name: Set up Cachix (devenv binary cache, read-only)
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: devenv
+
+      - name: Install devenv (pinned)
+        # Same pin as ci.yml; bump both together.
+        run: nix profile add github:cachix/devenv/b904dcb51fe48c30db250038241507f60752f222#devenv
+
+      - name: osv-scanner (vulnerabilities in package-lock.json)
+        run: devenv shell -- npm run scan:vulns
+
+      - name: Workflow static analysis (zizmor)
+        run: devenv shell -- zizmor --no-progress .github/workflows
+        env:
+          GH_TOKEN: ${{ github.token }}

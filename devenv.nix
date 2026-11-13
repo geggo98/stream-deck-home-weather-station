@@ -13,6 +13,7 @@
     pkgs.tsx
     pkgs.osv-scanner # dependency vulnerability + license scanning (npm run scan)
     pkgs.pinact # pin GitHub Actions to full commit SHAs
+    pkgs.zizmor # static analysis of the GitHub workflows (supply chain, injection, permissions)
     pkgs.imagemagick # SVG -> PNG and resizing for rendered assets (scripts/render-with-codex.py)
     pkgs.python3 # scripts/render-with-codex.py
   ];

@@ -128,6 +128,16 @@ What happens when the write fails is deliberate and not a silent success (implem
    the dead token and the next start shows `Sign in`; the recovery is a new authorisation.
    The plugin never retries a rejected token.
 
+## Supply chain of the project itself
+
+Pinned and approved workflow actions, a read-only default token, secret scanning with push
+protection, osv-scanner and zizmor in CI plus a weekly scan, dependency review on pull requests,
+and protected release tags are described in [docs/PUBLISHING.md](docs/PUBLISHING.md) (section
+"Repository settings (as code)") and enforced by `scripts/github-settings.py`. Release assets
+are built by CI from the tagged commit; verify a download against the release page, not a
+chat message. The release files carry no signature or provenance attestation yet
+(**not implemented**).
+
 ## What this plugin does not do
 
 - It sends nothing to the author or any third party, and contains no telemetry or update check.

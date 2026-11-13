@@ -45,10 +45,46 @@ hand.
 
 Pre-1.0 (`0.y.z`): `fix:`/`perf:` bump patch, `feat:` bumps minor, `feat!:` also minor.
 
+### Repository settings (as code)
+
+The settings are kept in `scripts/github-settings.py` and were applied with
+`npm run github:settings -- --apply` (admin rights needed; `--check` reports drift read-only,
+`--print-plan` prints the plan without any network call). What it enforces:
+
+- **Actions allow-list = the pins.** Only the actions pinned in `.github/workflows/*.yml` may
+  run, each by its exact commit SHA; nothing GitHub-owned or "verified" is allowed by default,
+  and *Require actions to be pinned to a full-length commit SHA* is on. The allow-list is
+  generated from the workflows, so it cannot drift from them (`tests/github-settings.test.ts`).
+  **Approval flow for an action update** (Dependabot or by hand): review the diff of the new
+  SHA, check out that branch, run `npm run github:settings -- --apply` (adds the new pin and
+  keeps the old ones so `main` keeps working), merge, then `-- --apply --prune` to drop the old pin.
+  Until then the update's CI run is refused by GitHub: that refusal is the control.
+- **Workflow token read-only by default**; each job asks for more. *Allow GitHub Actions to
+  create and approve pull requests* is on because release-please needs it (a trade-off: a
+  compromised workflow could then approve PRs; the allow-list and pinning limit what can run).
+- **Outside contributors**: workflow runs need approval every time.
+- **Secret scanning with push protection**, Dependabot alerts and security updates, private
+  vulnerability reporting, CodeQL default setup for JavaScript/TypeScript (GitHub runs it itself,
+  outside the allow-list; the language list showed empty right after enabling: **[unverified]**
+  that it picks up the code, check *Security, Code scanning* after the first run).
+- **Rulesets** without bypass actors: `main` cannot be deleted or force-pushed; release tags `v*`
+  cannot be moved, deleted or re-created. Direct pushes to `main` are still allowed (single
+  maintainer); a required-PR rule is the next step if more people get write access.
+- **Squash merges only**, PR title as commit message (Conventional Commits drive
+  release-please), branches deleted after merge, no wiki, projects or discussions.
+
+Checks in CI: `pinact run --check` (every `uses:` pinned), `zizmor` (workflow injection,
+credential persistence, permissions, known-vulnerable actions), `osv-scanner` on
+`package-lock.json` (gates the build; time-limited exceptions in `osv-scanner.toml`, see
+SECURITY.md), dependency review on pull requests (new dependencies with high advisories or
+unlisted licences fail; the licence allow-list in `ci.yml` is **[unverified]** against the real
+tree and may need an entry), and `.github/workflows/security.yml`, which repeats the
+osv-scanner and zizmor checks every Monday because advisories appear without commits.
+
 ### One-time repository setup
 
-- **Settings, Actions, General, Workflow permissions**: enable *Allow GitHub Actions to create
-  and approve pull requests*. Without it release-please cannot open its release PR.
+- **Workflow permissions** (done by the script, listed for completeness): *Allow GitHub Actions
+  to create and approve pull requests*. Without it release-please cannot open its release PR.
 - Pull requests created with the default `GITHUB_TOKEN` do not trigger other workflows (GitHub's
   documented behaviour), so CI does not run on the release PR by itself; close and reopen it, or
   push an empty commit to it, before merging. A personal access token or GitHub App for

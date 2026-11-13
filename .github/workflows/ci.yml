@@ -109,6 +109,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
+      - name: Workflow static analysis (zizmor)
+        # Unpinned or over-privileged actions, template injection, credential
+        # persistence, known-vulnerable actions. Online audits need the read-only token.
+        run: devenv shell -- zizmor --no-progress .github/workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: osv-scanner (vulnerabilities, gates the build)
         run: devenv shell -- npm run scan:vulns
 
@@ -117,3 +124,24 @@ jobs:
         # unavailable; the gating scan above does not touch it.
         continue-on-error: true
         run: devenv shell -- npm run scan
+
+  dependency-review:
+    # Blocks a pull request that adds a dependency with a known high or critical
+    # advisory or a licence outside the allow-list. Only on pull requests: it compares
+    # the base and head dependency graphs. No comment is posted (that would need
+    # pull-requests: write); the result is the job status and its summary.
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never
+          allow-licenses: MIT, ISC, BSD-2-Clause, BSD-3-Clause, Apache-2.0, 0BSD, BlueOak-1.0.0, CC0-1.0, Python-2.0, Unlicense

@@ -25,6 +25,7 @@
     "generate:icons": "tsx scripts/generate-icons.ts",
     "generate:manifest": "tsx scripts/generate-manifest.ts",
     "generate": "npm run generate:icons && npm run generate:manifest",
+    "github:settings": "python3 -I scripts/github-settings.py",
     "probe": "tsx scripts/probe-api.ts",
     "capture:fixture": "tsx scripts/capture-fixture.ts",
     "render": "python3 -I scripts/render-with-codex.py scripts/render-jobs.json assets/rendered"
