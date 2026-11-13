@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { describe, it } from "node:test";
 import path from "node:path";
-import { ProbeStore, checkRawOutPath, main, pressureFinding, structureSignature, summarise } from "../scripts/probe-api.ts";
+import { ProbeStore, VIA_SECRETSPEC, checkRawOutPath, main, pressureFinding, secretspecInvocation, structureSignature, summarise } from "../scripts/probe-api.ts";
 import { T0, fixture, makeTempDir, sendJson, startApiDouble, stationsOk, tokenIssuer } from "./station-helpers.ts";
 
 /** The probe output must carry structure only. These markers are put into every identifying field. */
@@ -147,9 +147,45 @@ describe("probe: main against a local double", () => {
 		assert.ok(!(r.out + r.err).includes("seed-refresh-0001"));
 	});
 
-	it("exits 1 without credentials", async () => {
-		const r = await capture(() => main([], {}));
+	it("exits 1 without credentials when secretspec cannot be started", async () => {
+		const r = await capture(() => main([], {}, { reexec: () => undefined }));
 		assert.equal(r.code, 1);
+		assert.match(r.err, /could not be started/);
+		assert.match(r.err, /must be set/);
+	});
+
+	it("without the values it starts itself once through secretspec and returns that run's exit code (npm run probe just works)", async () => {
+		const seen: Array<ReturnType<typeof secretspecInvocation>> = [];
+		const r = await capture(() => main(["--history"], { HOME: "/home/example" }, { repoRoot: "/repo", reexec: (i) => (seen.push(i), 0) }));
+		assert.equal(r.code, 0);
+		assert.equal(seen.length, 1);
+		assert.equal(seen[0]?.command, "secretspec");
+		assert.deepEqual(seen[0]?.args.slice(0, 3), ["run", "--", "node"]);
+		assert.ok(seen[0]?.args.includes("--history"), "the arguments are passed on");
+		assert.equal(seen[0]?.env[VIA_SECRETSPEC], "1");
+		const failing = await capture(() => main([], {}, { reexec: () => 2 }));
+		assert.equal(failing.code, 2, "the child's exit code is the probe's exit code");
+	});
+
+	it("never starts itself twice: inside the secretspec child a missing value is an error (no endless loop)", async () => {
+		let calls = 0;
+		const r = await capture(() => main([], { [VIA_SECRETSPEC]: "1" }, { reexec: () => (calls++, 0) }));
+		assert.equal(calls, 0);
+		assert.equal(r.code, 1);
+		assert.match(r.err, /must be set/);
+	});
+});
+
+describe("probe: how it starts itself through secretspec", () => {
+	it("uses the local dotenv file as provider when none is chosen and the file exists", () => {
+		const i = secretspecInvocation(["--history"], { PATH: "/bin" }, "/repo", (p) => p === "/repo/.env.local");
+		assert.equal(i.env.SECRETSPEC_PROVIDER, "dotenv:///repo/.env.local");
+		assert.deepEqual(i.args, ["run", "--", "node", "/repo/scripts/probe-api.ts", "--history"]);
+		assert.equal(i.env.PATH, "/bin");
+	});
+	it("keeps a provider the user chose, and sets none when there is no dotenv file", () => {
+		assert.equal(secretspecInvocation([], { SECRETSPEC_PROVIDER: "onepassword" }, "/repo", () => true).env.SECRETSPEC_PROVIDER, "onepassword");
+		assert.equal(secretspecInvocation([], {}, "/repo", () => false).env.SECRETSPEC_PROVIDER, undefined);
 	});
 });
 

@@ -241,7 +241,9 @@ Verified with the `dotenv` provider (a plain file, ignored by `.gitignore`; not 
 ```sh
 export SECRETSPEC_PROVIDER="dotenv://$PWD/.env.local"
 secretspec set NETATMO_CLIENT_ID      # prompts; repeat for NETATMO_CLIENT_SECRET, NETATMO_REFRESH_TOKEN
-secretspec run -- npm run probe       # one real request, prints a redacted summary
+npm run probe                        # one real request, prints a redacted summary; starts itself
+                                     # through `secretspec run` when the NETATMO_* values are not set
+                                     # (with no SECRETSPEC_PROVIDER it uses the local .env.local)
 ```
 
 Fixtures take two steps. The probe saves the raw response (it contains personal data) to a

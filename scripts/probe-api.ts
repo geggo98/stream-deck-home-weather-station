@@ -342,7 +342,30 @@ function isMain(): boolean {
 	return process.argv[1] !== undefined && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 }
 
+/** Set in the child so that a failed re-start through secretspec cannot start itself again. */
+export const VIA_SECRETSPEC = "PROBE_VIA_SECRETSPEC";
+
+/**
+ * How the probe starts itself through secretspec when the three values are missing from the
+ * environment: `secretspec run -- node scripts/probe-api.ts <args>`. If no provider is chosen
+ * (SECRETSPEC_PROVIDER unset) and the local dotenv file exists, that file is the provider, as
+ * documented in secretspec.toml. Nothing secret is read here.
+ */
+export function secretspecInvocation(
+	argv: readonly string[],
+	env: NodeJS.ProcessEnv,
+	repoRoot: string,
+	fileExists: (p: string) => boolean = fs.existsSync,
+): { readonly command: string; readonly args: string[]; readonly env: NodeJS.ProcessEnv } {
+	const dotenv = path.join(repoRoot, ".env.local");
+	const childEnv: NodeJS.ProcessEnv = { ...env, [VIA_SECRETSPEC]: "1" };
+	if (!childEnv.SECRETSPEC_PROVIDER && fileExists(dotenv)) childEnv.SECRETSPEC_PROVIDER = `dotenv://${dotenv}`;
+	return { command: "secretspec", args: ["run", "--", "node", path.join(repoRoot, "scripts", "probe-api.ts"), ...argv], env: childEnv };
+}
+
 export interface ProbeDeps {
+	/** Replaces the re-start through secretspec (tests). Returns the child's exit code, or undefined when secretspec cannot be started. */
+	readonly reexec?: (invocation: ReturnType<typeof secretspecInvocation>) => number | undefined;
 	/** Tests point this at a local double. */
 	readonly baseUrl?: string;
 	readonly runSecretspec?: (token: string) => { ok: boolean };
@@ -365,7 +388,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv = process.env,
 		},
 	});
 	if (values.help) {
-		console.error("usage: secretspec run -- npm run probe [-- --raw-out <file>] [--no-post-check] [--history]");
+		console.error("usage: npm run probe [-- --raw-out <file>] [--no-post-check] [--history]   (starts itself through `secretspec run` when the NETATMO_* values are not set; with no SECRETSPEC_PROVIDER the local .env.local is used)");
 		return 0;
 	}
 	let rawOut: string | undefined;
@@ -381,6 +404,20 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv = process.env,
 	const clientSecret = env.NETATMO_CLIENT_SECRET;
 	const refreshToken = env[REFRESH_TOKEN_NAME];
 	if (!clientId || !clientSecret || !refreshToken) {
+		if (env[VIA_SECRETSPEC] !== "1") {
+			// Not started through secretspec: do it ourselves once, so `npm run probe` just works.
+			const invocation = secretspecInvocation(argv, env, deps.repoRoot ?? REPO_ROOT);
+			const run =
+				deps.reexec ??
+				((i: ReturnType<typeof secretspecInvocation>) => {
+					const r = spawnSync(i.command, i.args, { env: i.env, stdio: "inherit" });
+					return r.error ? undefined : (r.status ?? 1);
+				});
+			console.error("probe: the NETATMO_* values are not in the environment; starting through `secretspec run` ...");
+			const code = run(invocation);
+			if (code !== undefined) return code;
+			console.error("probe: `secretspec` could not be started (is it installed? `devenv shell` provides it).");
+		}
 		console.error("NETATMO_CLIENT_ID, NETATMO_CLIENT_SECRET and NETATMO_REFRESH_TOKEN must be set (see secretspec.toml; run via `secretspec run -- npm run probe`).");
 		return 1;
 	}
