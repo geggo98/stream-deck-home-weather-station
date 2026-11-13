@@ -39,11 +39,11 @@
     "@tsconfig/node24": "^24.0.4",
     "@types/node": "^24.13.3",
     "lucide-static": "^1.27.0",
-    "rollup": "^4.62.2",
+    "rollup": "^4.67.2",
     "tslib": "^2.6.2",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@elgato/streamdeck": "^2.1.0"
+    "@elgato/streamdeck": "^3.0.4"
   }
 }
