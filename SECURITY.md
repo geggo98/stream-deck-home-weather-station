@@ -79,7 +79,8 @@ Honest limits:
 The Property Inspector is a small web page opened by the Stream Deck app. It loads its UI
 library from the plugin folder and runs only scripts that ship in the plugin. The shipped
 pages (every file in `ui/*.html`: `measurement.html`, `dial.html`, `focus.html`,
-`history.html`, `auto-rotate.html`, `info.html`, `navigation.html`; `tests/repo-hygiene.test.ts` compares this list with the
+`history.html`, `auto-rotate.html`, `info.html`, `navigation.html`,
+`sensor-focus.html`; `tests/repo-hygiene.test.ts` compares this list with the
 directory) carry this policy as a `<meta>` tag:
 `default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
 font-src 'self'; connect-src ws://127.0.0.1:* ws://localhost:*; base-uri 'none'; form-action 'none'`.

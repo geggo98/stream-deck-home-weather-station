@@ -42,7 +42,8 @@ Stations upload about every 10 minutes, so no key can be "more live" than that.
 | Action (name in the Stream Deck app) | Key press / dial gesture |
 |---|---|
 | Temperature, Humidity, CO2, Noise, Pressure, Rain, Wind | One fixed module and metric per key (set in the Property Inspector). Press: refresh, at most one real request per minute. Temperature also shows today's min/max for 6 seconds after the press. |
-| Focus Display | Shows the value of the current focus (station, sensor, value). Press: refresh. |
+| Focus Display | Follows the whole focus: station, sensor AND value. Next/Previous Value change what it shows. Press: refresh. |
+| Sensor Focus | Always follows the focus's station and sensor, but shows the value chosen in its own settings (default temperature); Next/Previous Value do not change it. Alert thresholds apply. Press: refresh (temperature also shows today's min/max for 6 seconds). |
 | Reload | Fetches the newest data from the cloud now. **It cannot force the station to measure a new value**; it only fetches what the station has uploaded last (about every 10 minutes). At most one real request per minute, however often you press. Shows "just now" or the age. |
 | Next Value / Previous Value | Next value on the same sensor (for example temperature, then humidity, then CO2 of the same module). |
 | Next Sensor / Previous Sensor | The same value on the next sensor (for example indoor temperature, then outdoor temperature). Dimmed with `No other sensor` when no other sensor reports it. |
@@ -60,9 +61,22 @@ Alerts are not an action: every measurement key can have an upper and a lower th
 its Property Inspector; outside it the key uses the alert colour (static, it does not
 blink).
 
-Which keys follow the focus is a setting per key ("follow focus"). By default the seven
-measurement keys do not follow it (they keep their module and metric), History and Weather
-Dial do, and Focus Display always does. None of this has been tried on Stream Deck
+Who follows what:
+
+- Focus Display follows sensor AND value of the focus.
+- Sensor Focus follows only the sensor (station and module) and shows the value chosen in its
+  own settings.
+- The seven fixed keys have a "Follow focus" checkbox (off by default). Ticked, a key behaves
+  like Sensor Focus: it follows the focus's station and sensor and keeps its own value (a CO2
+  key stays a CO2 key and says `No data` where the focused sensor has no CO2). Its alert
+  thresholds stay valid.
+- History and Weather Dial follow the whole focus (station, sensor and value) by default;
+  with "follow focus" off they keep their own module and value.
+- The sensor and station navigation keys and the dial's push (sensor) and push-rotate
+  (station) move the sensor focus. Next/Previous Value and the dial's rotation move the
+  value focus.
+
+None of this has been tried on Stream Deck
 hardware yet **[unverified]**.
 
 ### Supported metrics
@@ -199,9 +213,10 @@ For public bug reports redact them first, see the issue template.
 
 ## Development
 
-To build from source install [devenv](https://devenv.sh) (it provides Node.js 24, tsx, pinact,
-osv-scanner and zizmor; tsx is not an npm dependency, so without devenv you need Node.js 24 and
-`npm i -g tsx`). Then:
+To build from source install [devenv](https://devenv.sh) (it provides Node.js 24, pinact, osv-scanner,
+gitleaks, zizmor and actionlint). The project's own scripts run with Node.js 24's built-in type
+stripping, so `npm ci`, `npm run build`, `npm test` and `npm run probe` also work with a plain
+Node.js 24 and no devenv; only the checks and git hooks need the devenv tools. Then:
 
 ```sh
 devenv shell                 # or `direnv allow` (the repository tracks .envrc)

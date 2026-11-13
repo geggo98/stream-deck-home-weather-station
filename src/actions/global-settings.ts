@@ -240,6 +240,7 @@ export function forgetActionSettings(actionId: string): void {
 	actionSettings.delete(actionId);
 	actionDefaultMetric.delete(actionId);
 	historyActions.delete(actionId);
+	allMetricsActions.delete(actionId);
 }
 
 /**
@@ -259,6 +260,21 @@ export function rememberHistoryAction(actionId: string): void {
 
 export function isRememberedHistoryAction(actionId: string): boolean {
 	return historyActions.has(actionId);
+}
+
+/** Actions whose metric dropdown offers every display metric (the sensor focus: its sensor changes with the focus). Bounded like the others. */
+const allMetricsActions = new Set<string>();
+
+export function rememberAllMetricsAction(actionId: string): void {
+	if (!allMetricsActions.has(actionId) && allMetricsActions.size >= MAX_TRACKED_ACTION_SETTINGS) {
+		const oldest = allMetricsActions.values().next().value;
+		if (oldest !== undefined) allMetricsActions.delete(oldest);
+	}
+	allMetricsActions.add(actionId);
+}
+
+export function isRememberedAllMetricsAction(actionId: string): boolean {
+	return allMetricsActions.has(actionId);
 }
 
 /**

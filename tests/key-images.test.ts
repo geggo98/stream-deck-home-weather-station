@@ -126,6 +126,9 @@ describe("composed images are data URIs, for every status", () => {
 					const controller = new KeyController(makeEnv(source));
 					const key = new RecordingKeySurface();
 					await controller.appear(key, { moduleKey: makeModuleKey(STATION_ID, BASE_ID), showTrend: true, showMinMax: true, bigText: true }, metric);
+					const sensorFocus = new RecordingKeySurface("sensor-focus");
+					await controller.appear(sensorFocus, { metric, showTrend: true, showMinMax: true, bigText: true }, { metric: "temperature", follow: "sensor" });
+					for (const image of sensorFocus.images) assert.ok(image && isSvgDataUri(image), `sensor focus ${metric}/${state.kind}`);
 					for (const image of key.images) {
 						assert.ok(image && isSvgDataUri(image), `${metric}/${state.kind}`);
 						const svg = decodeSvg(image);

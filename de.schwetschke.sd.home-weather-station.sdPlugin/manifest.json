@@ -143,7 +143,7 @@
       "Name": "Focus Display",
       "UUID": "de.schwetschke.sd.home-weather-station.focus",
       "Icon": "imgs/actions/focus/icon",
-      "Tooltip": "Shows the value of the focused sensor. Follows the focus set by the navigation keys and the dial. Press to request fresh data (at most once a minute). No alerts: a threshold fits one value, and this key changes value with the focus.",
+      "Tooltip": "Shows the focused sensor AND the focused value. Follows the focus set by the navigation keys and the dial. Press to request fresh data (at most once a minute). No alerts: a threshold fits one value, and this key changes value with the focus.",
       "Controllers": [
         "Keypad"
       ],
@@ -154,6 +154,22 @@
         }
       ],
       "PropertyInspectorPath": "ui/focus.html"
+    },
+    {
+      "Name": "Sensor Focus",
+      "UUID": "de.schwetschke.sd.home-weather-station.focus-sensor",
+      "Icon": "imgs/actions/focus-sensor/icon",
+      "Tooltip": "Shows the value you choose for the sensor the focus points at; follows the Next/Previous Sensor and Station keys but not the Next/Previous Value keys",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/focus-sensor/key",
+          "TitleAlignment": "bottom"
+        }
+      ],
+      "PropertyInspectorPath": "ui/sensor-focus.html"
     },
     {
       "Name": "Reload",

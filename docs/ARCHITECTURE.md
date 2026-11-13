@@ -189,7 +189,8 @@ pressure, rain, wind) stay as fixed-binding keys.
 
 | id | What it does |
 |---|---|
-| `focus` | Follows the focus; shows value and label of the focused module. Press: rate-limited refresh. |
+| `focus` | Manifest name "Focus Display". Follows the whole focus (station, sensor AND metric); shows value and label of the focused module. Alerts are ignored (the unit changes with the metric). Press: rate-limited refresh. |
+| `focus-sensor` | Manifest name "Sensor Focus". Always follows the focus's station and sensor, shows the metric of ITS OWN settings (default temperature) and ignores the focus's metric, so Next/Previous Value do not change it. Alert thresholds apply (same metric, same unit). Press: rate-limited refresh; temperature also shows today's min/max for 6 s. Own page `ui/sensor-focus.html`: no module picker, no follow checkbox. |
 | `focus-refresh` | Reload: at most one real request per 60 s; shows "just now" or the age. **Cannot force the station to measure**; it only fetches the newest data the station has uploaded (about every 10 minutes). |
 | `focus-next-metric`, `focus-prev-metric` | Next / previous value on the same sensor; icon and small label show the metric that WOULD be selected. |
 | `focus-next-sensor`, `focus-prev-sensor` | Same value on the next / previous sensor; dimmed when no other module reports the metric. |
@@ -199,7 +200,17 @@ pressure, rain, wind) stay as fixed-binding keys.
 | `history` | 24 h history: cycles 6 h / 24 h / 3 d; sparkline of the focused (or, per setting, a fixed) module and metric. |
 | `weather-dial` (dial) | See "Dial mapping". Follows the focus or its own pinned module (`followFocus`, default true). |
 
-Every measurement key has the settings `followFocus`, `alertAbove` and `alertBelow`.
+Every measurement key has the settings `followFocus`, `alertAbove` and `alertBelow`. Follow
+semantics of the key controller (`effective()` in `src/actions/key-controller.ts`):
+
+* A fixed key with `followFocus` ticked follows the focus's station and sensor but keeps its
+  own metric (a CO2 key stays CO2, `No data` where the sensor lacks it); alerts stay valid.
+  `focus-sensor` behaves the same, with the follow always on.
+* `focus` (Focus Display) follows sensor AND metric and ignores alerts.
+* `history` and `weather-dial` follow the whole focus by default (`followFocus` default true);
+  off pins them to their own module and metric.
+* Sensor and station navigation (keys, dial push and push-rotate) move the sensor focus;
+  next/previous metric (keys, dial rotation) move the metric focus.
 
 ### Alerts
 

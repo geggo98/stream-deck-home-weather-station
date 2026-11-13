@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<title>Sensor Focus Settings</title>
+	<meta charset="utf-8" />
+	<meta http-equiv="Content-Security-Policy"
+		content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ws://127.0.0.1:* ws://localhost:*; base-uri 'none'; form-action 'none'" />
+	<script src="vendor/sdpi-components.js"></script>
+	<script src="home-weather-pi.js"></script>
+	<link rel="stylesheet" href="home-weather-pi.css" />
+</head>
+
+<body>
+	<p class="pi-hint">
+		This key always shows the sensor that the focus points at (moved by the Next/Previous Sensor and Station keys and the dial). You choose the value; the Next/Previous Value keys do not change it. Where the sensor does not measure the value, the key says No data. The Focus display key follows the value as well.
+	</p>
+
+	<sdpi-item label="Metric">
+		<sdpi-select setting="metric" default="temperature" placeholder="Select a measurement" datasource="getMetrics"
+			loading="Loading&hellip;"></sdpi-select>
+	</sdpi-item>
+
+	<sdpi-item label="Units">
+		<sdpi-select setting="unitSystem" default="auto">
+			<option value="auto">Automatic (use Default units)</option>
+			<option value="metric">Metric</option>
+			<option value="imperial">Imperial</option>
+		</sdpi-select>
+	</sdpi-item>
+
+	<sdpi-item label="Trend">
+		<sdpi-checkbox setting="showTrend" label="Show trend arrow"></sdpi-checkbox>
+	</sdpi-item>
+	<sdpi-item label="Min / max">
+		<sdpi-checkbox setting="showMinMax" label="Show today's minimum and maximum"></sdpi-checkbox>
+	</sdpi-item>
+	<p class="pi-hint">Only available for measurements that have a trend or a minimum and maximum.</p>
+
+	<sdpi-item label="Large value">
+		<sdpi-checkbox setting="bigText" label="Draw the value as image text (experimental)"></sdpi-checkbox>
+	</sdpi-item>
+	<p class="pi-hint">
+		Draws the number into the key image instead of using the native key title. Experimental: not yet
+		checked on real hardware. Switch it off if the key looks wrong.
+	</p>
+
+	<sdpi-item label="Label">
+		<sdpi-textfield setting="label" placeholder="Module name" maxlength="9"></sdpi-textfield>
+	</sdpi-item>
+	<p class="pi-hint">Replaces the sensor name on the key. Leave empty to use the name from the account.</p>
+
+	<div class="pi-account-title">Alerts</div>
+	<div id="alertBlock">
+	<sdpi-item label="Alert above">
+		<sdpi-textfield setting="alertAbove" pattern="-?[0-9]*[.,]?[0-9]*" placeholder="off" maxlength="8"></sdpi-textfield>
+	</sdpi-item>
+	<sdpi-item label="Alert below">
+		<sdpi-textfield setting="alertBelow" pattern="-?[0-9]*[.,]?[0-9]*" placeholder="off" maxlength="8"></sdpi-textfield>
+	</sdpi-item>
+	<p class="pi-hint">
+		Leave empty to switch an alert off. Enter the number in the unit this key shows, for example
+		&deg;C or &deg;F depending on the Units setting above. When the value is outside the limit,
+		the key turns to the alert colour (it does not blink).
+	</p>
+	</div>
+
+	<div class="sdpi-divider" style="margin: 16px 0;"></div>
+
+	<section id="account">
+		<div class="pi-account-title">Weather station account</div>
+		<p id="accountStatus" class="pi-status pi-status-unknown" role="status">Waiting for the plugin&hellip;</p>
+
+		<p class="pi-hint">
+			Recommended: register <code>http://localhost:53682/callback</code> as redirect URI in your own
+			app at dev.netatmo.com, enter Client ID and Client secret, then use "Sign in with browser".
+			Alternative: paste a refresh token and press "Save and test". Tick only the scope read_station
+			(no write or access scopes). Everything you enter stays on this computer.
+		</p>
+
+		<sdpi-item label="Client ID">
+			<input id="clientId" class="pi-input" type="text" autocomplete="off" spellcheck="false" />
+		</sdpi-item>
+		<sdpi-item label="Client secret">
+			<input id="clientSecret" class="pi-input" type="password" autocomplete="off" spellcheck="false" />
+		</sdpi-item>
+
+		<details id="browserLoginBox" class="pi-details" open>
+			<summary>Sign in with browser (recommended)</summary>
+			<p class="pi-hint">
+				Not yet verified against the real service. This redirect URI must be registered in your
+				Netatmo app before the sign-in can succeed:
+			</p>
+			<div id="redirectUri" class="pi-code">http://localhost:53682/callback</div>
+			<p class="pi-hint">
+				The secret is wiped from the field when you press the button. If you need a second try,
+				enter it again.
+			</p>
+			<div class="pi-buttons">
+				<button id="startBrowserLogin" class="pi-button" type="button">Sign in with browser</button>
+			</div>
+			<p id="browserLoginResult" class="pi-hint" role="status"></p>
+		</details>
+
+		<div class="pi-account-title">Or paste a refresh token</div>
+		<sdpi-item label="Refresh token">
+			<input id="refreshToken" class="pi-input" type="password" autocomplete="off" spellcheck="false" />
+		</sdpi-item>
+
+		<div class="pi-buttons">
+			<button id="saveCredentials" class="pi-button" type="button">Save and test</button>
+			<button id="clearCredentials" class="pi-button" type="button">Clear</button>
+			<button id="refreshNow" class="pi-button" type="button">Refresh now</button>
+		</div>
+		<p id="accountResult" class="pi-hint" role="status"></p>
+
+		<div class="pi-account-title">Plugin settings</div>
+		<sdpi-item label="Update interval">
+			<select id="pollInterval" class="pi-input">
+				<option value="60">1 min</option>
+				<option value="300" selected>5 min</option>
+				<option value="600">10 min</option>
+				<option value="1800">30 min</option>
+				<option value="3600">60 min</option>
+			</select>
+		</sdpi-item>
+		<p class="pi-hint">
+			Netatmo refreshes station data about every 10 minutes, so shorter intervals mostly cost API budget.
+			This applies to all keys and dials.
+		</p>
+		<sdpi-item label="Default units">
+			<select id="globalUnits" class="pi-input">
+				<option value="account" selected>Follow account</option>
+				<option value="metric">Metric</option>
+				<option value="imperial">Imperial</option>
+			</select>
+		</sdpi-item>
+		<p class="pi-hint">Used by every key whose own Units setting is Automatic.</p>
+
+		<p class="pi-hint pi-notice">Unofficial plugin, not affiliated with Netatmo, Elgato or Corsair.</p>
+	</section>
+
+	<script src="init/sensor-focus.js"></script>
+</body>
+
+</html>

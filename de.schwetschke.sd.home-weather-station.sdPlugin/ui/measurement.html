@@ -66,8 +66,10 @@
 		<sdpi-checkbox setting="followFocus" label="Follow the focus"></sdpi-checkbox>
 	</sdpi-item>
 	<p class="pi-hint">
-		When ticked, this key shows the plugin-wide focus (moved by the navigation keys and the dial) instead of the
-		module and metric chosen above.
+		When ticked, this key follows the sensor and station that the plugin-wide focus points at (moved by the
+		navigation keys and the dial), but keeps its own value: a CO2 key stays a CO2 key. Where that sensor does
+		not measure the value, the key says "No data". The module chosen above is ignored while ticked; the
+		Focus display key follows the value as well.
 	</p>
 
 	<sdpi-item label="Label">
@@ -76,7 +78,6 @@
 	<p class="pi-hint">Replaces the module name on the key. Leave empty to use the name from the account.</p>
 
 	<div class="pi-account-title">Alerts</div>
-	<p id="alertFollowHint" class="pi-hint pi-hidden" role="status">Thresholds only apply to fixed keys.</p>
 	<div id="alertBlock">
 	<sdpi-item label="Alert above">
 		<sdpi-textfield setting="alertAbove" pattern="-?[0-9]*[.,]?[0-9]*" placeholder="off" maxlength="8"></sdpi-textfield>

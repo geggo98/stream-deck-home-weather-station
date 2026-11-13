@@ -15,7 +15,7 @@ import { test } from "node:test";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ui = join(root, "de.schwetschke.sd.home-weather-station.sdPlugin", "ui");
-const PAGES = ["measurement.html", "dial.html", "focus.html", "auto-rotate.html", "info.html", "history.html", "navigation.html"] as const;
+const PAGES = ["measurement.html", "dial.html", "focus.html", "auto-rotate.html", "info.html", "history.html", "navigation.html", "sensor-focus.html"] as const;
 
 const VOID = new Set(["meta", "link", "input", "br", "hr", "img", "area", "base", "col", "source", "wbr"]);
 
@@ -191,7 +191,7 @@ for (const page of PAGES) {
 test("every page carries a byte-identical account block (whitespace normalised)", () => {
 	const blocks = PAGES.map((p) => accountBlock(read(p)));
 	assert.ok(blocks[0] && blocks[0].length > 800, "account block suspiciously short");
-	assert.equal(blocks.length, 7);
+	assert.equal(blocks.length, 8);
 	for (const [i, b] of blocks.entries()) assert.equal(b, blocks[0], `${PAGES[i]} differs from ${PAGES[0]}`);
 });
 
@@ -245,12 +245,12 @@ test("measurement page: followFocus checkbox and alert fields (empty = off, disp
 	assert.match(html, /in the unit this key shows/);
 });
 
-test("measurement page: alert fields sit in #alertBlock with a follow hint, wired by init/measurement.js", () => {
+test("measurement page: the alert fields stay visible for a following key (same metric, same unit) and the follow text promises what the plugin does", () => {
 	const html = read("measurement.html");
-	const block = html.slice(html.indexOf('id="alertBlock"'), html.indexOf('<div class="sdpi-divider"'));
-	assert.ok(block.includes('setting="alertAbove"') && block.includes('setting="alertBelow"'), "both fields inside #alertBlock");
-	assert.match(html, /id="alertFollowHint"[^>]*>Thresholds only apply to fixed keys/);
-	assert.match(readFileSync(join(ui, "init", "measurement.js"), "utf8"), /initAlertToggle/);
+	assert.ok(html.includes('setting="alertAbove"') && html.includes('setting="alertBelow"'), "both alert fields exist");
+	assert.doesNotMatch(html, /alertFollowHint|Thresholds only apply to fixed keys/, "the hide-on-follow hint belonged to the old semantics");
+	assert.doesNotMatch(readFileSync(join(ui, "init", "measurement.js"), "utf8"), /initAlertToggle/);
+	assert.match(html.replace(/\s+/g, " "), /a CO2 key stays a CO2 key/, "the follow text says the key keeps its own value");
 });
 
 test("PI pages: no brand word in headings or section titles", () => {
@@ -281,7 +281,7 @@ test("focus page: units, trend, min/max, no alert fields, no module or metric pi
 	assert.equal(b.get("unitSystem")?.attrs.default, "auto");
 	assert.ok(!tags(read("focus.html")).some((t) => "datasource" in t.attrs));
 	const text = read("focus.html").replace(/\s+/g, " ");
-	assert.match(text, /Thresholds only apply to fixed keys/);
+	assert.match(text, /one number cannot fit every measurement. For thresholds use a measurement key/);
 	for (const phrase of ["Reload", "Next / previous value", "Next / previous sensor", "Next / previous station", "cannot make the station measure"]) {
 		assert.ok(text.includes(phrase), `focus page lacks "${phrase}"`);
 	}
@@ -356,6 +356,7 @@ test("page init scripts exist for every page and name the right initialisers", (
 		["info", ["initAccount"]],
 		["navigation", ["initAccount"]],
 		["history", ["initModulePicker", "initFollowToggle", "initAccount"]],
+		["sensor-focus", ["initModulePicker", "initAccount"]],
 	] as const) {
 		const js = readFileSync(join(ui, "init", `${name}.js`), "utf8");
 		for (const fn of expected) assert.ok(js.includes(`HomeWeatherPI.${fn}()`), `${name}.js lacks ${fn}`);
@@ -430,4 +431,33 @@ test("brand rules: no logo or image references, no product branding in titles", 
 		assert.ok(read(page).includes('class="pi-account-title">Weather station account<'), `${page}: account heading`);
 	}
 	assert.ok(!/url\(/.test(read("home-weather-pi.css")), "the stylesheet loads no images or fonts");
+});
+
+test("sensor focus page: metric from getMetrics (no hot-reload), no module picker, no follow checkbox, alerts, label limit, own explanation", () => {
+	const html = read("sensor-focus.html");
+	const b = bound("sensor-focus.html");
+	assert.deepEqual([...b.keys()].sort(), ["alertAbove", "alertBelow", "bigText", "label", "metric", "showMinMax", "showTrend", "unitSystem"]);
+	assert.equal(b.get("metric")?.attrs.datasource, "getMetrics");
+	assert.equal(b.get("metric")?.attrs.default, "temperature");
+	assert.ok(!("hot-reload" in (b.get("metric")?.attrs ?? {})), "the metric list does not depend on a module");
+	assert.deepEqual(tags(html).filter((t) => "datasource" in t.attrs).map((t) => t.attrs.datasource), ["getMetrics"]);
+	assert.equal(b.get("unitSystem")?.attrs.default, "auto");
+	for (const id of ["manualModuleBtn", "manualModuleKey", "moduleListHint"]) assert.ok(!html.includes(`id="${id}"`), `module picker element ${id} must not be on this page`);
+	assert.ok(!html.includes("followFocus"), "this key always follows; no checkbox");
+	for (const key of ["alertAbove", "alertBelow"]) assert.equal(b.get(key)?.attrs.placeholder, "off");
+	assert.match(html, /image text \(experimental\)/);
+	const text = html.replace(/\s+/g, " ");
+	for (const phrase of [
+		"always shows the sensor that the focus points at",
+		"Next/Previous Sensor and Station keys and the dial",
+		"the Next/Previous Value keys do not change it",
+		"the key says No data",
+	]) assert.ok(text.includes(phrase), `sensor focus page lacks "${phrase}"`);
+	assert.match(html, /<title>Sensor Focus Settings<\/title>/);
+});
+
+test("focus page names the difference to the Sensor Focus key", () => {
+	const text = read("focus.html").replace(/\s+/g, " ");
+	assert.match(text, /<strong>Sensor Focus<\/strong> key is the sibling that follows the sensor only/);
+	assert.match(text, /This Focus display follows sensor and value/);
 });

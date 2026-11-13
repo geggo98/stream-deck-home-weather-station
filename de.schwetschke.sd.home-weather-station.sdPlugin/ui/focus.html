@@ -17,6 +17,7 @@
 		The navigation keys (next value, next sensor, next station) move the focus, and every
 		focus display, dial and history key that follows the focus repaints. Press this key to fetch the
 		newest data from the cloud (at most once a minute).
+		The <strong>Sensor Focus</strong> key is the sibling that follows the sensor only: it has its own value setting, so the Next / previous value keys do not change it. This Focus display follows sensor and value.
 	</p>
 	<p class="pi-hint">
 		The other keys of this group need no settings, they only move the focus or fetch data:
@@ -49,8 +50,8 @@
 	</p>
 
 <p class="pi-hint">
-		Alert thresholds are not offered here: this key follows the focus, and one number cannot fit every
-		measurement. Thresholds only apply to fixed keys (a measurement key with Follow focus cleared).
+		Alert thresholds are not offered here: this display follows the focus including its value, and one number
+		cannot fit every measurement. For thresholds use a measurement key (it keeps its own value) or the Sensor Focus key.
 	</p>
 
 	<div class="sdpi-divider" style="margin: 16px 0;"></div>

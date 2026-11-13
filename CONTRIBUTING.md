@@ -6,7 +6,7 @@ most projects.
 
 ## Development environment
 
-Tooling comes from [devenv](https://devenv.sh) (Node.js 24, tsx, pinact, osv-scanner, git hooks).
+Tooling comes from [devenv](https://devenv.sh) (Node.js 24, pinact, osv-scanner, gitleaks, zizmor, actionlint, git hooks; the scripts need no tsx).
 
 ```sh
 devenv shell        # or: direnv allow

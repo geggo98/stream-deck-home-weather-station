@@ -10,8 +10,9 @@ PUBLISHING, WEATHER-API (sourced API facts), RENDERING (artwork), `SECURITY.md`,
 
 ## Commands
 
-Use `devenv shell -- <cmd>` (or direnv) so node 24, tsx, pinact and osv-scanner are on PATH. tsx is NOT an npm
-dependency; it comes from devenv.
+Use `devenv shell -- <cmd>` (or direnv) so node 24, pinact, osv-scanner, gitleaks, zizmor and actionlint are on
+PATH. The project's scripts (`scripts/*.ts`) run with Node 24's own type stripping (no tsx): imports carry `.ts`
+extensions and sources use no enums, namespaces or parameter properties.
 
 ```sh
 npm ci

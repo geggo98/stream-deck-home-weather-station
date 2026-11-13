@@ -522,7 +522,8 @@ test("docs: getmeasure type names, units/freshness location, budget numbers and 
 	assert.match(readRoot("docs/PUBLISHING.md").replace(/\s+/g, " "), /expected to install it \*\*\[unverified\]\*\*/);
 	// README: the nav-key faces, the build route that needs devenv
 	for (const face of ["One station", "No other sensor", "Only one value", "No module"]) assert.ok(readme.includes(`\`${face}\``), `README troubleshooting lacks ${face}`);
-	assert.match(readme, /npm i -g tsx/);
+	assert.doesNotMatch(readme, /npm i -g tsx/, "the scripts run with Node 24's own type stripping, no tsx needed");
+	assert.match(readme.replace(/\s+/g, " "), /also work with a plain Node\.js 24 and no devenv/);
 	// NOTICE lists what the bundle really inlines
 	const notice = readRoot("NOTICE");
 	for (const pkg of ["@elgato/streamdeck", "@elgato/schemas", "@elgato/utils", "ws ", "zod", "tslib"]) assert.ok(notice.includes(pkg), `NOTICE lacks ${pkg}`);
@@ -547,9 +548,19 @@ test("README states what reload can and cannot do", () => {
 	assert.match(readme, /cannot force the station to measure/);
 	assert.match(readme, /about every 10 minutes/);
 	// the names users see in the Stream Deck app (manifest Name), including the seven measurement keys
-	for (const word of ["Temperature, Humidity, CO2", "Focus Display", "Reload", "Next Value", "Next Sensor", "Next Station", "Auto Rotate", "Data Age and Battery", "History", "Weather Dial"]) {
+	for (const word of ["Temperature, Humidity, CO2", "Focus Display", "Sensor Focus", "Reload", "Next Value", "Next Sensor", "Next Station", "Auto Rotate", "Data Age and Battery", "History", "Weather Dial"]) {
 		assert.ok(readme.includes(`| ${word}`), `README actions table lacks ${word}`);
 	}
+	// the follow rules are stated exactly (README and ARCHITECTURE)
+	const flat = readme.replace(/\s+/g, " ");
+	assert.match(flat, /Focus Display follows sensor AND value/);
+	assert.match(flat, /Sensor Focus follows only the sensor/);
+	assert.match(flat, /a CO2 key stays a CO2 key/);
+	assert.match(flat, /History and Weather Dial follow the whole focus/);
+	const archFlat = readRoot("docs/ARCHITECTURE.md").replace(/\s+/g, " ");
+	assert.match(archFlat, /`focus-sensor`/);
+	assert.match(archFlat, /ignores the focus's metric/);
+	assert.match(readRoot("SECURITY.md"), /`sensor-focus\.html`/);
 	assert.match(readme, /Alerts are not an action/);
 	assert.match(readme, /Every action has the account section/);
 });

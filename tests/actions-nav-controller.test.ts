@@ -183,17 +183,53 @@ describe("followers repaint on a focus change, and nothing else does", () => {
 		const dial = new RecordingDialSurface("dial");
 		await dials.appear(dial, {});
 		assert.match(display.lastTitle ?? "", /^21\.4°C/);
-		assert.match(follower.lastTitle ?? "", /^21\.4°C/, "a following key shows the focus, not its preset metric");
+		assert.match(follower.lastTitle ?? "", /^612\s+ppm/, "a following measurement key keeps its own metric (CO2) and does not turn into the focus's temperature");
 		assert.equal(dial.last?.value.value, "21.4°C");
 		const fixedWrites = fixed.titles.length + fixed.images.length;
 
 		store.set({ stationId: STATION_B_ID, moduleId: BASE_B_ID, metric: "humidity" });
 		assert.match(display.lastTitle ?? "", /^55%\nAttic/);
-		assert.match(follower.lastTitle ?? "", /^55%/);
+		assert.doesNotMatch(follower.lastTitle ?? "", /^55%/, "the focus moved to humidity: the CO2 key must not follow the metric");
+		assert.doesNotMatch(follower.lastTitle ?? "", /%/, "no humidity value on a CO2 key");
 		assert.equal(dial.last?.value.value, "55%");
 		assert.equal(dial.last?.title.value, "Humidity");
 		assert.equal(fixed.titles.length + fixed.images.length, fixedWrites, "a fixed-binding key is not a follower");
 		assert.equal(display.settingsWrites.length + follower.settingsWrites.length, 0, "followers never adopt a module of their own");
+	});
+
+	it("a following CO2 key stays a CO2 key: it follows the sensor, never the metric (reported bug: it turned into a temperature key)", async () => {
+		const { keys, store } = setup();
+		const follower = new RecordingKeySurface("follower");
+		await keys.appear(follower, { followFocus: true }, "co2");
+		assert.match(follower.lastTitle ?? "", /^612\s+ppm/);
+
+		store.set({ ...here, metric: "temperature" });
+		assert.match(follower.lastTitle ?? "", /^612\s+ppm/, "focus on temperature: still CO2");
+		store.set({ ...here, metric: "humidity" });
+		assert.match(follower.lastTitle ?? "", /^612\s+ppm/, "focus on humidity: still CO2");
+
+		// the focus moves to the outdoor sensor, which has no CO2: no value, and above all no temperature
+		store.set({ stationId: STATION_ID, moduleId: OUTDOOR_ID, metric: "temperature" });
+		assert.doesNotMatch(follower.lastTitle ?? "", /°C|%|ppm/, `the outdoor sensor has no CO2: got ${JSON.stringify(follower.lastTitle)}`);
+		assert.match(follower.lastTitle ?? "", /^No\s+data/i);
+
+		store.set({ ...here, metric: "pressure" });
+		assert.match(follower.lastTitle ?? "", /^612\s+ppm/, "back on the base station it shows CO2 again");
+		assert.equal(follower.settingsWrites.length, 0, "a follower never writes its own module");
+	});
+
+	it("a following key keeps its alert thresholds (same metric, same unit), the focus display ignores them", async () => {
+		const { keys } = setup();
+		const plain = new RecordingKeySurface("plain");
+		const alerting = new RecordingKeySurface("alerting");
+		const display = new RecordingKeySurface("display");
+		const displayAlerting = new RecordingKeySurface("displayAlerting");
+		await keys.appear(plain, { followFocus: true }, "co2");
+		await keys.appear(alerting, { followFocus: true, alertAbove: 100 }, "co2");
+		await keys.appear(display, {}, { metric: "temperature", follow: true });
+		await keys.appear(displayAlerting, { alertAbove: 1 }, { metric: "temperature", follow: true });
+		assert.notEqual(plain.lastImage, alerting.lastImage, "612 ppm is above 100: the following CO2 key must show the alert colour");
+		assert.equal(display.lastImage, displayAlerting.lastImage, "the focus display shows other metrics: a threshold typed for one unit is ignored");
 	});
 
 	it("stops reacting after it disappeared", async () => {

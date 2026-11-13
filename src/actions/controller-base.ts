@@ -23,7 +23,7 @@ import { adoptionCandidate } from "../render/select.ts";
 import type { DisplayMetricId } from "../render/metrics.ts";
 import { BindCoordinator } from "./bind-coordinator.ts";
 import { fireAndLog } from "./fire-and-log.ts";
-import { forgetActionSettings, rememberActionDefaultMetric, rememberActionSettings, rememberHistoryAction } from "./global-settings.ts";
+import { forgetActionSettings, rememberActionDefaultMetric, rememberAllMetricsAction, rememberActionSettings, rememberHistoryAction } from "./global-settings.ts";
 import { RepaintClock } from "./repaint-clock.ts";
 
 export interface BaseSurface {
@@ -116,6 +116,10 @@ export abstract class ControllerBase<S extends BaseSurface, E extends BaseEntry<
 	protected offersHistoryMetricsOnly(_entry: E): boolean {
 		return false;
 	}
+	/** True for the action whose metric dropdown offers every display metric, whatever sensor it points at now. */
+	protected offersAllMetrics(_entry: E): boolean {
+		return false;
+	}
 	/** True for an action whose module and metric come from the focus: it never adopts a module of its own. */
 	protected followsFocus(_entry: E): boolean {
 		return false;
@@ -138,6 +142,7 @@ export abstract class ControllerBase<S extends BaseSurface, E extends BaseEntry<
 		const preset = this.presetMetric(entry);
 		if (preset) rememberActionDefaultMetric(surface.id, preset);
 		if (this.offersHistoryMetricsOnly(entry)) rememberHistoryAction(surface.id);
+		if (this.offersAllMetrics(entry)) rememberAllMetricsAction(surface.id);
 		return this.bind(entry);
 	}
 

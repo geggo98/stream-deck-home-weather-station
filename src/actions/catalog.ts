@@ -69,6 +69,7 @@ export const DIAL_SPEC = {
  */
 export type FocusKind =
 	| "display"
+	| "sensor-focus"
 	| "refresh"
 	| "next-metric"
 	| "prev-metric"
@@ -87,7 +88,7 @@ export interface FocusSpec {
 	readonly tooltip: string;
 	readonly glyph: GlyphName;
 	/** Property Inspector page. Every action has one, so a first-time user who drops ANY key finds the account section. */
-	readonly propertyInspector?: "ui/focus.html" | "ui/auto-rotate.html" | "ui/info.html" | "ui/history.html" | "ui/navigation.html";
+	readonly propertyInspector?: "ui/focus.html" | "ui/sensor-focus.html" | "ui/auto-rotate.html" | "ui/info.html" | "ui/history.html" | "ui/navigation.html";
 }
 
 /** The page of the seven navigation keys: what the key does, plus the shared account section (no settings of their own). */
@@ -100,7 +101,8 @@ const NAV_PI = "ui/navigation.html" as const;
  * per minute.
  */
 export const FOCUS_SPECS = [
-	{ id: "focus", kind: "display", name: "Focus Display", tooltip: "Shows the value of the focused sensor. Follows the focus set by the navigation keys and the dial. Press to request fresh data (at most once a minute). No alerts: a threshold fits one value, and this key changes value with the focus.", glyph: "crosshair", propertyInspector: "ui/focus.html" },
+	{ id: "focus", kind: "display", name: "Focus Display", tooltip: "Shows the focused sensor AND the focused value. Follows the focus set by the navigation keys and the dial. Press to request fresh data (at most once a minute). No alerts: a threshold fits one value, and this key changes value with the focus.", glyph: "crosshair", propertyInspector: "ui/focus.html" },
+	{ id: "focus-sensor", kind: "sensor-focus", name: "Sensor Focus", tooltip: "Shows the value you choose for the sensor the focus points at; follows the Next/Previous Sensor and Station keys but not the Next/Previous Value keys", glyph: "locate-fixed", propertyInspector: "ui/sensor-focus.html" },
 	{ id: "focus-refresh", kind: "refresh", name: "Reload", tooltip: "Fetches the newest data the cloud has (at most one real request per minute). It cannot make the station measure: stations upload about every 10 minutes. Shows how old the data is.", glyph: "refresh-cw", propertyInspector: NAV_PI },
 	{ id: "focus-next-metric", kind: "next-metric", name: "Next Value", tooltip: "Moves the focus to the next value of the same sensor (for example temperature, then humidity). Shows which value comes next.", glyph: "step-forward", propertyInspector: NAV_PI },
 	{ id: "focus-prev-metric", kind: "prev-metric", name: "Previous Value", tooltip: "Moves the focus to the previous value of the same sensor. Shows which value comes before.", glyph: "step-back", propertyInspector: NAV_PI },

@@ -193,10 +193,12 @@ test("the global-settings events and message fields match the protocol", () => {
 test("label maxlength in both pages equals MAX_LABEL_CHARS in src/render/title.ts (cannot drift)", () => {
 	const limit = Number(/export const MAX_LABEL_CHARS = (\d+);/.exec(readFileSync(join(root, "src", "render", "title.ts"), "utf8"))?.[1]);
 	assert.ok(Number.isInteger(limit) && limit > 0, "constant not found; the regex no longer sees it");
-	const html = readFileSync(join(ui, "measurement.html"), "utf8");
-	const m = /<sdpi-textfield[^>]*setting="label"[^>]*>/.exec(html)?.[0] ?? "";
-	assert.ok(m, "label textfield not found");
-	assert.equal(Number(/maxlength="(\d+)"/.exec(m)?.[1]), limit);
+	for (const page of ["measurement.html", "sensor-focus.html"]) {
+		const html = readFileSync(join(ui, page), "utf8");
+		const m = /<sdpi-textfield[^>]*setting="label"[^>]*>/.exec(html)?.[0] ?? "";
+		assert.ok(m, `${page}: label textfield not found`);
+		assert.equal(Number(/maxlength="(\d+)"/.exec(m)?.[1]), limit, page);
+	}
 });
 
 function piScripts(): Array<{ file: string; text: string }> {
@@ -807,30 +809,3 @@ test("follow toggle: pages without the block or the checkbox do not throw", () =
 	followFixture(false);
 });
 
-function alertFixture(initial: Any) {
-	const box = fakeEl("follow") as FakeEl & { value: Any };
-	box.value = initial;
-	const block = fakeEl("alertBlock");
-	block.style.display = "";
-	const hint = { classList: { cls: new Set(["pi-hidden"]), add(c: string) { this.cls.add(c); }, remove(c: string) { this.cls.delete(c); } } };
-	const doc = {
-		getElementById: (id: string) => (id === "alertBlock" ? block : id === "alertFollowHint" ? hint : null),
-		querySelector: (sel: string) => (sel.includes("followFocus") ? box : null),
-	};
-	const timers = fakeTimers();
-	load().initAlertToggle({ doc, client: null, timers });
-	return { box, block, hint };
-}
-
-test("alert toggle: fields hidden and hint shown only while follow focus is ticked (unset = fixed key)", () => {
-	const unset = alertFixture(undefined);
-	assert.equal(unset.block.style.display, "");
-	assert.ok(unset.hint.classList.cls.has("pi-hidden"));
-	const { box, block, hint } = alertFixture(true);
-	assert.equal(block.style.display, "none");
-	assert.ok(!hint.classList.cls.has("pi-hidden"));
-	box.value = false;
-	box.dispatch("valuechange");
-	assert.equal(block.style.display, "");
-	assert.ok(hint.classList.cls.has("pi-hidden"));
-});

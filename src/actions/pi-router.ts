@@ -61,6 +61,8 @@ export interface PiRouterDeps {
 	getActionDefaultMetric?(actionId: string): DisplayMetricId | undefined;
 	/** True for the history key: its metric dropdown offers only measurements that have a history. */
 	isHistoryAction?(actionId: string): boolean;
+	/** True for the sensor focus: its sensor changes with the focus, so its metric dropdown offers ALL display metrics. */
+	isAllMetricsAction?(actionId: string): boolean;
 	getGlobal(): GlobalSettings;
 	/** Why the global settings cannot be written this session (the load failed), or undefined. */
 	getGlobalError?(): string | undefined;
@@ -127,9 +129,10 @@ export function moduleItems(snapshot: StationSnapshot | undefined): DatasourceIt
 }
 
 /** Metric dropdown items for the module an action points at (all metrics when unknown). */
-export function metricItems(snapshot: StationSnapshot | undefined, settings: Pick<ActionSettings, "moduleKey"> | undefined, options: { readonly historyOnly?: boolean } = {}): DatasourceItem[] {
+export function metricItems(snapshot: StationSnapshot | undefined, settings: Pick<ActionSettings, "moduleKey"> | undefined, options: { readonly historyOnly?: boolean; readonly allMetrics?: boolean } = {}): DatasourceItem[] {
 	let ids = DISPLAY_METRIC_IDS;
-	if (snapshot) {
+	// The sensor focus changes sensor with the focus, so it offers every metric.
+	if (snapshot && options.allMetrics !== true) {
 		const selected =
 			settings?.moduleKey === undefined ? adoptionCandidate(snapshot, "temperature") : findModule(snapshot, settings.moduleKey);
 		if (selected) ids = metricsReportedBy(selected.module.values);
@@ -367,7 +370,7 @@ export function createPiRouter(deps: PiRouterDeps): PiRouter {
 				case PI_EVENTS.getMetrics: {
 					const message: DatasourceMessage = {
 						event: PI_EVENTS.getMetrics,
-						items: metricItems(service?.getSnapshot(), deps.getActionSettings(actionId), { historyOnly: deps.isHistoryAction?.(actionId) === true }),
+						items: metricItems(service?.getSnapshot(), deps.getActionSettings(actionId), { historyOnly: deps.isHistoryAction?.(actionId) === true, allMetrics: deps.isAllMetricsAction?.(actionId) === true }),
 						status: await accountStatus(),
 					};
 					// `defaultValue`: the action's preset metric, only when the module offers it (a dropdown

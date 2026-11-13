@@ -20,6 +20,7 @@ export const GLYPH_NAMES = [
 	"circle-gauge",
 	// focus family: catalog glyphs
 	"crosshair",
+	"locate-fixed",
 	"refresh-cw",
 	"step-forward",
 	"step-back",

@@ -15,6 +15,7 @@ import {
 	updateGlobalSettings,
 	getRememberedActionSettings,
 	getRememberedDefaultMetric,
+	isRememberedAllMetricsAction,
 	isRememberedHistoryAction,
 } from "./actions/global-settings.ts";
 import { chooseLogLevel } from "./actions/log-level.ts";
@@ -105,6 +106,7 @@ const router = createPiRouter({
 	getActionSettings: getRememberedActionSettings,
 	getActionDefaultMetric: getRememberedDefaultMetric,
 	isHistoryAction: isRememberedHistoryAction,
+	isAllMetricsAction: isRememberedAllMetricsAction,
 	getGlobal: getCachedGlobalSettings,
 	getGlobalError: globalSettingsError,
 	updateGlobal: updateGlobalSettings,

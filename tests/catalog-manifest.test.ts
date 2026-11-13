@@ -122,3 +122,43 @@ describe("generated glyph module", () => {
 		}
 	});
 });
+
+describe("the sensor focus action", () => {
+	const spec = FOCUS_SPECS.find((s) => s.id === "focus-sensor");
+
+	it("is a catalog entry of kind sensor-focus with its own page, UUID and picture files", () => {
+		assert.ok(spec, "focus-sensor is in FOCUS_SPECS");
+		assert.equal(spec.kind, "sensor-focus");
+		assert.equal(spec.name, "Sensor Focus");
+		assert.equal(spec.propertyInspector, "ui/sensor-focus.html");
+		assert.equal(uuidFor("focus-sensor"), `${PLUGIN_ID}.focus-sensor`);
+		for (const file of ["icon.svg", "key.svg"]) assert.ok(existsSync(join(ROOT, PLUGIN_DIR_NAME, "imgs/actions/focus-sensor", file)), file);
+		const entry = committed.Actions.find((a) => a.UUID === uuidFor("focus-sensor"))!;
+		assert.equal(entry.PropertyInspectorPath, "ui/sensor-focus.html");
+		assert.deepEqual(entry.Controllers, ["Keypad"]);
+	});
+
+	it("uses a glyph of its own and the catalog has 20 actions", () => {
+		const others = [...KEYPAD_SPECS, ...FOCUS_SPECS, DIAL_SPEC].filter((s) => s.id !== "focus-sensor").map((s): string => s.glyph);
+		assert.ok(spec && !others.includes(spec.glyph), "no other action draws the same glyph");
+		assert.ok(spec.glyph in GLYPHS);
+		assert.equal(ACTION_IDS.length, 20);
+		assert.equal(committed.Actions.length, 20);
+	});
+
+	it("says what sets it apart from the focus display, in the catalog and the manifest", () => {
+		const display = FOCUS_SPECS.find((s) => s.id === "focus")!;
+		assert.match(spec!.tooltip, /follows the Next\/Previous Sensor and Station keys but not the Next\/Previous Value keys/);
+		assert.match(display.tooltip, /^Shows the focused sensor AND the focused value\./);
+		const tips = committed.Actions.map((a) => a.Tooltip);
+		assert.ok(tips.includes(spec!.tooltip) && tips.includes(display.tooltip));
+	});
+
+	it("is registered by its own class with a literal catalog id, and the licence note lists its glyph", () => {
+		const text = readFileSync(join(ROOT, "src/actions/focus-keys.ts"), "utf-8");
+		assert.match(text, /@action\(\{ UUID: uuidFor\("focus-sensor"\) \}\)\s*export class SensorFocusKeyAction/);
+		assert.match(text, /follow: "sensor"/);
+		const licence = readFileSync(join(ROOT, PLUGIN_DIR_NAME, "imgs/icons/LICENSE-lucide.txt"), "utf-8");
+		assert.ok(licence.includes(spec!.glyph), "the licence note names every glyph in use");
+	});
+});

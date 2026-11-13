@@ -660,33 +660,6 @@
 		e.timers.setTimeout(apply, 2000);
 	}
 
-	/**
-	 * Alert thresholds apply to a fixed metric only. While "Follow focus" is ticked, hide the
-	 * threshold fields (#alertBlock) and show the hint (#alertFollowHint). Unlike the dial and
-	 * history pages, this page's checkbox is unticked when unset, so only an explicit true follows.
-	 */
-	function initAlertToggle(env) {
-		const e = env || defaultEnv();
-		const box = e.doc.querySelector('[setting="followFocus"]');
-		const block = e.doc.getElementById("alertBlock");
-		const hint = e.doc.getElementById("alertFollowHint");
-		if (!box || !block) return;
-		const apply = function () {
-			const v = box.value;
-			const follow = v === true || v === "true";
-			block.style.display = follow ? "none" : "";
-			if (hint) {
-				if (follow) hint.classList.remove("pi-hidden");
-				else hint.classList.add("pi-hidden");
-			}
-		};
-		apply();
-		box.addEventListener("valuechange", apply);
-		box.addEventListener("change", apply);
-		e.timers.setTimeout(apply, 500);
-		e.timers.setTimeout(apply, 2000);
-	}
-
 	window.HomeWeatherPI = {
 		EVENTS: EVENTS,
 		describeStatus: describeStatus,
@@ -700,7 +673,6 @@
 		initAccount: initAccount,
 		initModulePicker: initModulePicker,
 		initFollowToggle: initFollowToggle,
-		initAlertToggle: initAlertToggle,
 		pickDefault: pickDefault,
 	};
 })();

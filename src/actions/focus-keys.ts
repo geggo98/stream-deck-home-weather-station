@@ -43,6 +43,31 @@ export class FocusDisplayKeyAction extends SingletonAction<KeySettings> {
 	}
 }
 
+/**
+ * The sensor focus: a measurement key that always follows the focus's station and sensor, but
+ * shows the metric of ITS OWN settings (default temperature), so the Next/Previous Value keys
+ * do not change it. It never adopts a module of its own.
+ */
+@action({ UUID: uuidFor("focus-sensor") })
+export class SensorFocusKeyAction extends SingletonAction<KeySettings> {
+	override async onWillAppear(ev: WillAppearEvent<KeySettings>): Promise<void> {
+		if (!ev.action.isKey()) return;
+		await keyController().appear(surfaceOf(ev.action), ev.payload.settings, { metric: "temperature", follow: "sensor" });
+	}
+	override onDidReceiveSettings(ev: DidReceiveSettingsEvent<KeySettings>): void {
+		keyController().settingsChanged(ev.action.id, ev.payload.settings);
+	}
+	override onKeyDown(ev: KeyDownEvent<KeySettings>): void {
+		keyController().press(ev.action.id);
+	}
+	override onWillDisappear(ev: WillDisappearEvent<KeySettings>): void {
+		keyController().disappear(ev.action.id);
+	}
+	override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, KeySettings>): Promise<void> {
+		await routePiMessage(ev.action.id, ev.payload);
+	}
+}
+
 @action({ UUID: uuidFor("history") })
 export class HistoryKeyAction extends SingletonAction<KeySettings> {
 	override async onWillAppear(ev: WillAppearEvent<KeySettings>): Promise<void> {
@@ -155,6 +180,7 @@ export class InfoKeyAction extends NavKeyAction {
 export function createFocusActions(): SingletonAction<KeySettings>[] {
 	return [
 		new FocusDisplayKeyAction(),
+		new SensorFocusKeyAction(),
 		new FocusRefreshKeyAction(),
 		new FocusNextMetricKeyAction(),
 		new FocusPrevMetricKeyAction(),

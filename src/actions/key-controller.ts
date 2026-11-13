@@ -74,8 +74,8 @@ export const OVERLAY_MS = 6000;
 
 interface KeyEntry extends BaseEntry<KeySurface>, FaceEntry {
 	readonly defaultMetric: DisplayMetricId;
-	/** The focus display: always follows the focus, whatever the settings say. */
-	readonly forceFollow: boolean;
+	/** What the action id forces, whatever the settings say: "all" (focus display), "sensor" (sensor focus) or "none" (settings decide). */
+	readonly follow: FollowMode;
 	overlayUntil: number;
 	overlayTimer: ReturnType<typeof setTimeout> | undefined;
 }
@@ -86,8 +86,23 @@ export interface KeyControllerEnv extends ControllerEnv {
 
 const LOADING: ConnectionState = { kind: "loading" };
 
-/** What an action id passes to `appear`: the metric it shows by default, or `{ metric, follow: true }` for the focus display. */
-export type KeyExtra = DisplayMetricId | { readonly metric: DisplayMetricId; readonly follow?: boolean };
+/**
+ * How a key follows the plugin-wide focus: "none" = not at all, "sensor" = station and sensor but
+ * its own metric, "all" = station, sensor and metric.
+ */
+export type FollowMode = "none" | "sensor" | "all";
+
+/**
+ * What an action id passes to `appear`: the metric it shows by default, or `{ metric, follow }`.
+ * `follow: true` means "all" (the focus display); "sensor" is the sensor focus.
+ */
+export type KeyExtra = DisplayMetricId | { readonly metric: DisplayMetricId; readonly follow?: boolean | FollowMode };
+
+function followModeOf(extra: KeyExtra | undefined): FollowMode {
+	if (typeof extra !== "object") return "none";
+	if (extra.follow === true || extra.follow === "all") return "all";
+	return extra.follow === "sensor" ? "sensor" : "none";
+}
 
 export class KeyController extends ControllerBase<KeySurface, KeyEntry, KeyExtra> {
 	private readonly overlayMs: number;
@@ -99,7 +114,8 @@ export class KeyController extends ControllerBase<KeySurface, KeyEntry, KeyExtra
 
 	/**
 	 * `extra` is what this action id shows when the PI has not picked another metric, or
-	 * `{ metric, follow: true }` for the focus display, which always follows the focus.
+	 * `{ metric, follow: true }` for the focus display (follows the focus completely) or
+	 * `{ metric, follow: "sensor" }` for the sensor focus (follows station and sensor only).
 	 */
 	override appear(surface: KeySurface, settings: ActionSettings, extra?: KeyExtra): Promise<void> {
 		return super.appear(surface, settings, extra);
@@ -112,7 +128,7 @@ export class KeyController extends ControllerBase<KeySurface, KeyEntry, KeyExtra
 			settings,
 			unsubscribe: undefined,
 			defaultMetric: metric !== undefined && isDisplayMetricId(metric) ? metric : "temperature",
-			forceFollow: typeof extra === "object" && extra.follow === true,
+			follow: followModeOf(extra),
 			paintedImage: undefined,
 			paintedTitle: undefined,
 			titlePainted: false,
@@ -122,26 +138,39 @@ export class KeyController extends ControllerBase<KeySurface, KeyEntry, KeyExtra
 	}
 
 	protected override followsFocus(entry: KeyEntry): boolean {
-		return entry.forceFollow || followFocusOf(entry.settings, false);
+		return entry.follow !== "none" || followFocusOf(entry.settings, false);
 	}
 
 	/**
-	 * What the key shows: its own module and metric, or those of the focus while it follows.
-	 * A following key before the first snapshot falls back to its own (loading) state.
+	 * What the key shows.
 	 *
-	 * Alert thresholds are ignored while the key follows the focus: they are typed in the unit
-	 * of one metric, and a followed key shows a different metric (and unit) whenever the focus
-	 * moves. The values stay in the key's settings and apply again when it stops following.
+	 * - A fixed measurement key (CO2, humidity ...) with "Follow focus" ticked follows the focus's
+	 *   STATION AND SENSOR but keeps its own metric: a CO2 key must stay a CO2 key when the focus
+	 *   moves to another sensor (it shows "No data" where that sensor has no CO2). Its alert
+	 *   thresholds therefore stay valid (same metric, same unit) and apply.
+	 * - The focus display (follow "all") follows everything: sensor AND metric. Alert thresholds
+	 *   are ignored there: they are typed in the unit of one metric, and the displayed metric (and
+	 *   unit) changes whenever the focus moves. The values stay in the settings.
+	 *
+	 * - The sensor focus (follow "sensor") behaves like such a key, but always, not only when ticked:
+	 *   a stored moduleKey is overridden by the focus's, and the metric comes from its own settings.
+	 *
+	 * Before the first snapshot a following key falls back to its own (loading) state.
 	 */
 	private effective(entry: KeyEntry): { metric: DisplayMetricId; settings: ActionSettings } {
 		const own = { metric: this.ownMetric(entry), settings: entry.settings };
 		if (!this.followsFocus(entry)) return own;
 		const { alertAbove: _above, alertBelow: _below, ...withoutAlerts } = entry.settings;
-		if (!this.env.focus) return { metric: own.metric, settings: withoutAlerts };
+		const fullFollow = entry.follow === "all";
+		const fallback = fullFollow ? { metric: own.metric, settings: withoutAlerts } : own;
+		if (!this.env.focus) return fallback;
 		const focus = resolveFocus(this.env.getSource()?.getSnapshot(), this.env.focus.get());
-		const metric = focus ? displayMetricOf(focus.metric) : undefined;
-		if (!focus || !metric) return { metric: own.metric, settings: withoutAlerts };
-		return { metric, settings: { ...withoutAlerts, moduleKey: focusModuleKey(focus) } };
+		if (!focus) return fallback;
+		const moduleKey = focusModuleKey(focus);
+		if (!fullFollow) return { metric: own.metric, settings: { ...entry.settings, moduleKey } };
+		const metric = displayMetricOf(focus.metric);
+		if (!metric) return fallback;
+		return { metric, settings: { ...withoutAlerts, moduleKey } };
 	}
 
 	private ownMetric(entry: KeyEntry): DisplayMetricId {
@@ -150,6 +179,10 @@ export class KeyController extends ControllerBase<KeySurface, KeyEntry, KeyExtra
 
 	private metricOf(entry: KeyEntry): DisplayMetricId {
 		return this.effective(entry).metric;
+	}
+
+	protected override offersAllMetrics(entry: KeyEntry): boolean {
+		return entry.follow === "sensor";
 	}
 
 	protected override presetMetric(entry: KeyEntry): DisplayMetricId {
