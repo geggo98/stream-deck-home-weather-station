@@ -136,15 +136,33 @@
       pass_filenames = false;
       always_run = true;
     };
-    # Block secrets from being committed (pre-commit). Default rules plus the narrow
-    # allowlist in .gitleaks.toml for the fake sentinel secrets of two tests; without
-    # --config the hook flags those sentinels and blocks the first commit.
+    # Block secrets from being committed (pre-commit). gitleaks' default rules plus the narrow
+    # allowlist in .gitleaks.toml for the fake sentinel secrets of two tests (without --config
+    # the hook flags those sentinels), PLUS the real values from the local git-ignored
+    # .env.local (secretspec's dotenv file), in raw, URL-encoded, base64 and JSON spellings:
+    # scripts/gitleaks-local-secrets.py turns them into temporary rules, never prints them and
+    # deletes the temporary config. Without .env.local only the generic rules run.
     gitleaks = {
       enable = true;
-      name = "gitleaks (secret scan)";
-      entry = "${pkgs.gitleaks}/bin/gitleaks git --staged --no-banner --redact --config .gitleaks.toml";
+      name = "gitleaks (secret scan, incl. local secret values)";
+      entry = "env GITLEAKS_BIN=${pkgs.gitleaks}/bin/gitleaks ${pkgs.python3}/bin/python3 -I scripts/gitleaks-local-secrets.py --staged";
+      # devenv's built-in gitleaks hook passes its own arguments ("git --pre-commit --redact
+      # --verbose"); the wrapper takes none of them, so they must be emptied.
+      args = [ ];
       language = "system";
       pass_filenames = false;
+    };
+    # Same scan over the whole history before pushing (pre-push): a secret committed earlier and
+    # "removed" in a later commit is still published by a push.
+    gitleaks-history = {
+      enable = true;
+      name = "gitleaks (history, incl. local secret values)";
+      entry = "env GITLEAKS_BIN=${pkgs.gitleaks}/bin/gitleaks ${pkgs.python3}/bin/python3 -I scripts/gitleaks-local-secrets.py --history";
+      args = [ ];
+      language = "system";
+      pass_filenames = false;
+      always_run = true;
+      stages = [ "pre-push" ];
     };
     # Scan dependencies for known vulnerabilities before pushing (pre-push).
     osv-scanner = {

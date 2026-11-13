@@ -118,6 +118,8 @@ tests/*.test.ts          flat directory, so the unquoted glob stays portable
   When pasting example output, replace EVERY identifier on the line. Search by identifier format, not by keyword.
   `tests/repo-hygiene.test.ts` does that; do not widen its allowlist without a written reason. The same holds
   for `.gitleaks.toml` (path AND regex scoped to two tests' fake sentinels); never widen it to silence a finding.
+  The gitleaks hooks run through `scripts/gitleaks-local-secrets.py`, which also matches the real values of
+  the git-ignored `.env.local`; never print, copy or commit those values, and never pass them on a command line.
 - Do not copy identifying data (devices, hosts, names, addresses) from the sibling project; copy patterns only.
 - Do not claim anything that was not verified. There are no live API results and no hardware results unless a doc
   says otherwise; mark such statements **[unverified]** in docs and comments.

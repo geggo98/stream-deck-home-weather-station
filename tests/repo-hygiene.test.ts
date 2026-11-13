@@ -360,7 +360,11 @@ test("gitleaks config: allowlist needs BOTH the two test paths AND the sentinel 
 	assert.match(toml, /regexes\s*=/);
 	assert.equal((toml.match(/\[\[allowlists\]\]/g) ?? []).length, 1, "exactly one allowlist entry; widen only with a written reason");
 	assert.doesNotMatch(toml, /^\s*(?:commits|stopwords)\s*=/m, "no commit or stopword escape hatches");
-	assert.match(readRoot("devenv.nix"), /gitleaks git --staged --no-banner --redact --config \.gitleaks\.toml/);
+	// The hooks go through the wrapper, which extends .gitleaks.toml and adds the local secret values.
+	const nix = readRoot("devenv.nix");
+	assert.match(nix, /gitleaks-local-secrets\.py --staged/, "the pre-commit hook must use the wrapper");
+	assert.match(nix, /gitleaks-local-secrets\.py --history/, "the pre-push hook must scan the history too");
+	assert.match(readRoot("scripts/gitleaks-local-secrets.py"), /\.gitleaks\.toml/, "the wrapper must extend the project's config");
 	for (const f of sentinelTests) assert.ok(existsSync(join(root, f)), `${f} named in .gitleaks.toml does not exist`);
 });
 

@@ -171,5 +171,13 @@ only from the release page of this repository, never from a link in a chat messa
 Never commit credentials, real station data or personal data; see
 [CONTRIBUTING.md](CONTRIBUTING.md). `tests/repo-hygiene.test.ts` scans for identifier
 formats (MAC addresses, e-mail addresses, UUID-like ids, long token-like strings, coordinates)
-and `gitleaks` runs as a pre-commit hook. Neither is a guarantee. If a secret does get
+and `gitleaks` runs as a pre-commit hook on staged files and as a pre-push hook on the whole
+history. Both go through `scripts/gitleaks-local-secrets.py`, which adds the REAL values from your
+local, git-ignored `.env.local` (the secretspec dotenv file) as extra rules, in raw, URL-encoded,
+base64 and JSON spellings, so a pasted token is caught even where no generic pattern would see it.
+The values are never printed and the temporary rules are deleted after the run; without
+`.env.local` (for example in CI) only the generic rules run, and the run says so. CI scans the
+history with the generic rules too. `npm run scan:secrets` runs the history scan by hand. A value
+that only lives in 1Password or another provider is NOT covered unless it is also in `.env.local`.
+None of this is a guarantee. If a secret does get
 committed, treat it as compromised: revoke it first, then clean the history.
