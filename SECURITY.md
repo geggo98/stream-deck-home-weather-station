@@ -175,9 +175,17 @@ and `gitleaks` runs as a pre-commit hook on staged files and as a pre-push hook 
 history. Both go through `scripts/gitleaks-local-secrets.py`, which adds the REAL values from your
 local, git-ignored `.env.local` (the secretspec dotenv file) as extra rules, in raw, URL-encoded,
 base64 and JSON spellings, so a pasted token is caught even where no generic pattern would see it.
+Because a refresh token rotates and the exact value is stale within hours, a second layer works
+without any value: `.gitleaks-shapes.json` (committed, no value in it) describes what the secrets
+look like, calibrated on the real ones with `npm run scan:calibrate` (character class and length
+per part, separators, and a minimum Shannon entropy of the measured value minus 0.5 bit; hex
+identifiers must match their length exactly). Any new string of that shape is reported, also in
+CI. Placeholders with low entropy, commit hashes and lock-file digests are not. Known limits:
+upper-case spellings of a lower-case hex token, a token split across lines, and a token in an
+encoding other than raw, percent-encoded or JSON-escaped are not recognised by the shape layer.
 The values are never printed and the temporary rules are deleted after the run; without
-`.env.local` (for example in CI) only the generic rules run, and the run says so. CI scans the
-history with the generic rules too. `npm run scan:secrets` runs the history scan by hand. A value
+`.env.local` (for example in CI) the exact values are not checked, only the shapes and the generic
+rules, and the run says so. CI scans the history that way too. `npm run scan:secrets` runs the history scan by hand. A value
 that only lives in 1Password or another provider is NOT covered unless it is also in `.env.local`.
 None of this is a guarantee. If a secret does get
 committed, treat it as compromised: revoke it first, then clean the history.

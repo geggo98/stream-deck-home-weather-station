@@ -23,6 +23,7 @@
     "scan:vulns": "osv-scanner scan source --lockfile=package-lock.json",
     "scan:secrets": "python3 -I scripts/gitleaks-local-secrets.py --history",
     "scan:secrets:staged": "python3 -I scripts/gitleaks-local-secrets.py --staged",
+    "scan:calibrate": "python3 -I scripts/gitleaks-local-secrets.py --calibrate",
     "test": "node --test tests/*.test.ts",
     "generate:icons": "tsx scripts/generate-icons.ts",
     "generate:manifest": "tsx scripts/generate-manifest.ts",

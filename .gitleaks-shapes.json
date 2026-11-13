@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "note": "Shapes of the project's secrets: character class and length per part, separators and a minimum Shannon entropy. NO value is stored. Regenerate with `npm run scan:calibrate` after a secret changes its format. `allow` entries (kept by --calibrate) exempt ONE obviously fake sample in ONE file; each needs a reason.",
+  "shapes": [
+    {
+      "name": "NETATMO_CLIENT_ID",
+      "parts": [
+        {
+          "charset": "hex-lower",
+          "min": 24,
+          "max": 24
+        }
+      ],
+      "separators": [],
+      "minEntropy": 2.94
+    },
+    {
+      "name": "NETATMO_CLIENT_SECRET",
+      "parts": [
+        {
+          "charset": "alnum",
+          "min": 39,
+          "max": 47
+        }
+      ],
+      "separators": [],
+      "minEntropy": 4.33
+    },
+    {
+      "name": "NETATMO_REFRESH_TOKEN",
+      "parts": [
+        {
+          "charset": "hex-lower",
+          "min": 24,
+          "max": 24
+        },
+        {
+          "charset": "hex-lower",
+          "min": 32,
+          "max": 32
+        }
+      ],
+      "separators": [
+        "|"
+      ],
+      "minEntropy": 3.38
+    }
+  ],
+  "allow": [
+    {
+      "path": "tests/repo-hygiene\\.test\\.ts$",
+      "regex": "0123456789abcdef0123456[7]",
+      "reason": "Synthetic sample of the hygiene scanner's self-test: a counting sequence that merely has the length and entropy of a client id. The regex is written with a character class so that its own text does not have the shape it exempts."
+    }
+  ]
+}

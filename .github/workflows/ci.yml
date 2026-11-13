@@ -117,10 +117,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Secret scan over the whole history (gitleaks, generic rules)
+      - name: Secret scan over the whole history (gitleaks: generic rules + calibrated secret shapes)
         # CI has no .env.local, so only the generic rules and the project's narrow allowlist
         # apply here; the local hooks add the real values of the maintainer's machine.
-        run: devenv shell -- gitleaks git --no-banner --redact --config .gitleaks.toml
+        run: devenv shell -- python3 -I scripts/gitleaks-local-secrets.py --history
 
       - name: osv-scanner (vulnerabilities, gates the build)
         run: devenv shell -- npm run scan:vulns
