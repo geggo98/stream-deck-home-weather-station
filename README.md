@@ -233,8 +233,9 @@ Credentials for the probe script are read through
 [secretspec](https://secretspec.dev) (version 0.21 tested); `secretspec.toml` names the three
 variables. A secretspec provider has to be selected first, otherwise `set` fails with
 "No provider backend configured". Two ways were tried in a scratch home directory.
-(If your secretspec setup asks for a reason on every access, as the maintainer's agent
-sessions do, export `SECRETSPEC_REASON` with any short text; ordinary setups do not need it.)
+(secretspec 0.21 refuses access to secrets without a stated reason when the project policy
+`require_reason` applies, which it did for the maintainer. `npm run probe` passes a fixed reason
+itself; for your own `secretspec` calls export `SECRETSPEC_REASON` with any short text.)
 
 Verified with the `dotenv` provider (a plain file, ignored by `.gitignore`; not encrypted):
 

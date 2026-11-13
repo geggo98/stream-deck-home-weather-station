@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { describe, it } from "node:test";
 import path from "node:path";
-import { ProbeStore, VIA_SECRETSPEC, checkRawOutPath, main, pressureFinding, secretspecInvocation, structureSignature, summarise } from "../scripts/probe-api.ts";
+import { ProbeStore, SECRETSPEC_REASON, VIA_SECRETSPEC, checkRawOutPath, main, pressureFinding, secretspecInvocation, structureSignature, summarise } from "../scripts/probe-api.ts";
 import { T0, fixture, makeTempDir, sendJson, startApiDouble, stationsOk, tokenIssuer } from "./station-helpers.ts";
 
 /** The probe output must carry structure only. These markers are put into every identifying field. */
@@ -160,7 +160,8 @@ describe("probe: main against a local double", () => {
 		assert.equal(r.code, 0);
 		assert.equal(seen.length, 1);
 		assert.equal(seen[0]?.command, "secretspec");
-		assert.deepEqual(seen[0]?.args.slice(0, 3), ["run", "--", "node"]);
+		assert.deepEqual(seen[0]?.args.slice(0, 4), ["run", "--reason", SECRETSPEC_REASON, "--"], "secretspec's require_reason policy needs a stated reason");
+		assert.equal(seen[0]?.args[4], "node");
 		assert.ok(seen[0]?.args.includes("--history"), "the arguments are passed on");
 		assert.equal(seen[0]?.env[VIA_SECRETSPEC], "1");
 		const failing = await capture(() => main([], {}, { reexec: () => 2 }));
@@ -180,8 +181,13 @@ describe("probe: how it starts itself through secretspec", () => {
 	it("uses the local dotenv file as provider when none is chosen and the file exists", () => {
 		const i = secretspecInvocation(["--history"], { PATH: "/bin" }, "/repo", (p) => p === "/repo/.env.local");
 		assert.equal(i.env.SECRETSPEC_PROVIDER, "dotenv:///repo/.env.local");
-		assert.deepEqual(i.args, ["run", "--", "node", "/repo/scripts/probe-api.ts", "--history"]);
+		assert.deepEqual(i.args, ["run", "--reason", SECRETSPEC_REASON, "--", "node", "/repo/scripts/probe-api.ts", "--history"]);
 		assert.equal(i.env.PATH, "/bin");
+	});
+	it("does not override a reason the user already set", () => {
+		const i = secretspecInvocation([], { SECRETSPEC_REASON: "my own reason" }, "/repo", () => false);
+		assert.ok(!i.args.includes("--reason"), "the environment variable is honoured by secretspec itself");
+		assert.equal(i.env.SECRETSPEC_REASON, "my own reason");
 	});
 	it("keeps a provider the user chose, and sets none when there is no dotenv file", () => {
 		assert.equal(secretspecInvocation([], { SECRETSPEC_PROVIDER: "onepassword" }, "/repo", () => true).env.SECRETSPEC_PROVIDER, "onepassword");
