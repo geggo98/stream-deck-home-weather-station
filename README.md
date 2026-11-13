@@ -100,8 +100,9 @@ Whether it also runs in OpenDeck is **[unverified]**.
 The release page carries no checksum or signature. The release workflow attaches a
 build-provenance attestation to the file (GitHub's artifact attestation); verify a
 download with `gh attestation verify <file> --repo <owner>/<repo>`
-**[unverified]**: the attestation step has not run yet, because no release exists. Download only from the
-releases page of this repository.
+(checked once on release v0.1.1: the genuine file verified, a copy with one byte appended did
+not). The attestation proves that this repository's `release.yml` built the file, not that the
+code is free of bugs. Download only from the releases page of this repository.
 
 ## Set up
 

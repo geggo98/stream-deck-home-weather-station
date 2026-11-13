@@ -48,8 +48,11 @@ hand.
    `actions/attest-build-provenance` (permissions `id-token` and `attestations` write only in
    this job) and attaches the file with `gh release upload`. A compromised install script can
    therefore not reach the token that writes to the release. The new actions
-   (`actions/download-artifact`, `actions/attest-build-provenance`) must be on the allow-list:
-   run `npm run github:settings -- --check`, and `--apply` after review.
+   (`actions/download-artifact`, `actions/attest-build-provenance` and the action it calls
+   itself, `actions/attest`) must be on the allow-list: run `npm run github:settings -- --check`,
+   and `--apply` after review. The first run of this job (release v0.1.1) failed exactly on the
+   missing nested pin; after the fix and a re-run of the failed job the asset was attached and
+   `gh attestation verify` accepted it.
 
 Pre-1.0 (`0.y.z`): `fix:`/`perf:` bump patch, `feat:` bumps minor, `feat!:` also minor.
 
@@ -60,7 +63,9 @@ The settings are kept in `scripts/github-settings.py` and were applied with
 `--print-plan` prints the plan without any network call). What it enforces:
 
 - **Actions allow-list = the pins.** Only the actions pinned in `.github/workflows/*.yml` may
-  run, each by its exact commit SHA; nothing GitHub-owned or "verified" is allowed by default,
+  run (plus the pinned actions that composite actions call themselves, `TRANSITIVE_PINS` in the
+  script: `attest-build-provenance` calls `actions/attest`, which the first release run revealed),
+  each by its exact commit SHA; nothing GitHub-owned or "verified" is allowed by default,
   and *Require actions to be pinned to a full-length commit SHA* is on. The allow-list is
   generated from the workflows, so it cannot drift from them (`tests/github-settings.test.ts`).
   **Approval flow for an action update** (Dependabot or by hand): review the diff of the new

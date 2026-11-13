@@ -9,7 +9,8 @@ usage: github-settings.py [--repo OWNER/NAME] [--print-plan | --check | --apply]
   --prune       with --apply: replace the Actions allow-list instead of adding to it
 
 What it enforces, and why:
-  * Actions: only the actions pinned in .github/workflows/*.yml may run, each by its exact
+  * Actions: only the actions pinned in .github/workflows/*.yml (plus the pinned actions that
+    composite actions call themselves, TRANSITIVE_PINS) may run, each by its exact
     full commit SHA ("owner/repo@<40 hex>"), nothing GitHub-owned or "verified" by default,
     and `sha_pinning_required` makes GitHub reject a workflow that references a tag.
     A Dependabot bump of an action therefore fails CI until a maintainer has reviewed it and run
@@ -55,6 +56,16 @@ def workflow_pins() -> list[str]:
 	return sorted(pins)
 
 
+# Actions that composite actions in our workflows call themselves. GitHub checks these against the
+# allow-list too (and refused the first release run for exactly this reason). Each entry: the pin as
+# the wrapper pins it, and which workflow action brings it in. Re-check when the wrapper's pin changes:
+#   gh api "repos/<owner>/<repo>/contents/action.yml?ref=<sha>" --jq .content | base64 -d | grep uses:
+TRANSITIVE_PINS = {
+	# nested by actions/attest-build-provenance@4d101475... (v4.2.2); itself a node action, v4.2.1
+	"actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d": "actions/attest-build-provenance",
+}
+
+
 def plan() -> dict:
 	return {
 		"repository": {
@@ -80,8 +91,9 @@ def plan() -> dict:
 		"selected_actions": {
 			"github_owned_allowed": False,
 			"verified_allowed": False,
-			"patterns_allowed": workflow_pins(),
+			"patterns_allowed": sorted(set(workflow_pins()) | set(TRANSITIVE_PINS)),
 		},
+		"transitive_pins": TRANSITIVE_PINS,
 		"workflow_permissions": {"default_workflow_permissions": "read", "can_approve_pull_request_reviews": True},
 		"fork_pr_approval": {"approval_policy": "all_external_contributors"},
 		"toggles": {

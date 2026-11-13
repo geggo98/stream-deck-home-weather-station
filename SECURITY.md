@@ -154,7 +154,9 @@ with a read-only token and no write permission, a second job without checkout an
 holds the write token, attests the file (GitHub build-provenance attestation, signed through
 the workflow's OIDC identity) and attaches it. The release carries no checksum file and no
 separate signature. Verify a download with `gh attestation verify <file> --repo <owner>/<repo>`
-(**[unverified]**: no release exists yet, so the attestation step has never run). Download
+(checked on release v0.1.1: the genuine file verified, a copy with one byte appended failed; the
+attestation names this repository and `release.yml` as builder, it does not vouch for the code
+itself). Download
 only from the release page of this repository, never from a link in a chat message.
 
 ## What this plugin does not do

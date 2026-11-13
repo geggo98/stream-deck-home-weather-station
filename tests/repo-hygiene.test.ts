@@ -123,7 +123,7 @@ function detectors(): readonly Detector[] {
 			kind: "long-hex",
 			re: /(?<![0-9A-Za-z+/=_-])[0-9a-fA-F]{32,}(?![0-9A-Za-z+/=_-])/g,
 			allowed: (m, line, file) =>
-				(m.length === 40 && /\buses:/.test(line)) ||
+				(m.length === 40 && (/\buses:/.test(line) || new RegExp(`[\\w.-]+/[\\w.-]+@${m}`).test(line))) || // pinned action: `uses:` line or "owner/repo@<sha>" (TRANSITIVE_PINS)
 				(file.endsWith("VENDORED.md") && m.length === 64), // sha256 values sit in table rows, away from the header
 		},
 		{
@@ -512,10 +512,11 @@ test("docs: getmeasure type names, units/freshness location, budget numbers and 
 	assert.match(sec, /TRACE[^.]*frame/i);
 	assert.match(sec, /\[::1\]/);
 	assert.doesNotMatch(sec, /Secrets cross the Property Inspector exactly once/);
-	// provenance: claimed only as far as the workflow does it, and marked unverified
+	// provenance: claimed only as far as it was actually checked (release v0.1.1: genuine file verified, tampered copy failed)
 	assert.match(sec, /attest/i);
 	assert.doesNotMatch(sec, /\(\*\*not implemented\*\*\)/);
-	assert.match(sec.replace(/\s+/g, " "), /\*\*\[unverified\]\*\*: no release exists yet/);
+	assert.match(sec.replace(/\s+/g, " "), /checked on release v0\.1\.1: the genuine file verified, a copy with one byte appended failed/);
+	assert.doesNotMatch(sec, /no release exists yet/);
 	// no maintainer-specific or ticket-like repository slug in the dry-run example
 	assert.match(readRoot("docs/PUBLISHING.md"), /--repo-url=<owner>\/<repo>/);
 	assert.match(readRoot("docs/PUBLISHING.md").replace(/\s+/g, " "), /expected to install it \*\*\[unverified\]\*\*/);

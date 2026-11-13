@@ -40,7 +40,9 @@ describe("github settings plan", () => {
 	it("allows exactly the pinned actions the workflows use, nothing GitHub-owned or verified by default", () => {
 		const fromWorkflows = usesIn(join(root, ".github", "workflows"));
 		assert.ok(fromWorkflows.length >= 4, `looked at ${fromWorkflows.length} action references, expected more`);
-		assert.deepEqual(plan.selected_actions.patterns_allowed, fromWorkflows);
+		const transitive = Object.keys(plan.transitive_pins as Record<string, string>);
+		for (const ref of transitive) assert.match(ref, /^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/, "a transitive pin is a full commit SHA too");
+		assert.deepEqual(plan.selected_actions.patterns_allowed, [...new Set([...fromWorkflows, ...transitive])].sort(), "workflow pins plus the documented transitive pins, nothing else");
 		for (const ref of plan.selected_actions.patterns_allowed as string[]) assert.match(ref, /@[0-9a-f]{40}$/);
 		assert.equal(plan.selected_actions.github_owned_allowed, false);
 		assert.equal(plan.selected_actions.verified_allowed, false);
