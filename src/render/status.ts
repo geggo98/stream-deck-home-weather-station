@@ -10,7 +10,6 @@
  */
 
 import type { ConnectionState, Freshness, ModuleData, StationSnapshot } from "../adapter/station/types.ts";
-import { UNPERSISTED_ROTATION_MESSAGE } from "../adapter/station/token-manager.ts";
 import { METRICS, type DisplayMetricId } from "./metrics.ts";
 import { adoptionCandidate, findModule, type SelectedModule } from "./select.ts";
 
@@ -40,6 +39,8 @@ export type Classification =
 			readonly stale: boolean;
 			/** Age of the reading in ms when known; drives the age hint. */
 			readonly ageMs: number | undefined;
+			/** The renewed sign-in could not be saved: the value stays as it is, the face adds a marker. */
+			readonly warning: boolean;
 	  };
 
 export interface ClassifyInput {
@@ -52,17 +53,21 @@ export interface ClassifyInput {
 }
 
 /**
- * The adapter reports "the renewed sign-in could not be saved" as an `error` connection state
- * while data keeps flowing. The data is current, so nothing may be dimmed or aged because of it;
- * the message belongs in the account status of the Property Inspector instead.
+ * True while the adapter reports "the renewed sign-in could not be saved" (`ok` with a warning).
+ * The data is current, so nothing is dimmed or aged for it; the faces only add a marker
+ * (tile dot, dial indicator colour and title suffix) and the Property Inspector shows the text.
  */
-export function isUnpersistedRotation(connection: ConnectionState): boolean {
-	return connection.kind === "error" && connection.message === UNPERSISTED_ROTATION_MESSAGE;
+export function hasWarning(connection: ConnectionState): boolean {
+	return connection.kind === "ok" && connection.warning !== undefined;
 }
 
-/** True when the cached data may be out of date because the last poll failed. */
+/**
+ * True when the cached data may be out of date because the last poll failed. A SINGLE failed
+ * poll counts: every key then shows its value dimmed with an age hint at once, without waiting
+ * for a grace period (the adapter keeps the last snapshot and the plugin only marks it).
+ */
 export function hasCachedError(connection: ConnectionState): boolean {
-	return connection.kind === "error" && !isUnpersistedRotation(connection);
+	return connection.kind === "error";
 }
 
 export type ConnectionStatus = Extract<Classification["kind"], "no-service" | "no-credentials" | "auth-error" | "loading" | "offline">;
@@ -102,6 +107,7 @@ export function classify(input: ClassifyInput): Classification {
 		value: raw,
 		stale: freshness !== "fresh" || cachedError,
 		ageMs: selected.module.measuredAt === null ? undefined : Math.max(0, input.now - selected.module.measuredAt),
+		warning: hasWarning(input.connection),
 	};
 }
 

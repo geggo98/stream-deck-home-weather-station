@@ -14,7 +14,7 @@ import type { ConnectionState } from "../adapter/station/types.ts";
 import { AutoRotator } from "../focus/auto-rotate.ts";
 import { locate, nextMetric, resolveFocus, type Focus } from "../focus/navigate.ts";
 import { autoRotateSecondsOf, type ActionSettings } from "../focus/settings.ts";
-import { buildNavView, infoPages, navigationPreview, type NavKind } from "../render/nav-view.ts";
+import { buildNavView, infoPages, isNavKind, navigationPreview, type NavKind } from "../render/nav-view.ts";
 import type { DisplayMetricId } from "../render/metrics.ts";
 import { classifyConnection } from "../render/status.ts";
 import { ControllerBase, type BaseEntry, type ControllerEnv } from "./controller-base.ts";
@@ -34,7 +34,7 @@ export interface NavControllerEnv extends ControllerEnv {
 
 const LOADING: ConnectionState = { kind: "loading" };
 
-export class NavController extends ControllerBase<KeySurface, NavEntry> {
+export class NavController extends ControllerBase<KeySurface, NavEntry, NavKind> {
 	readonly rotator: AutoRotator;
 	private readonly offRotator: () => void;
 
@@ -48,13 +48,14 @@ export class NavController extends ControllerBase<KeySurface, NavEntry> {
 		});
 	}
 
-	/** `extra` is the NavKind of the action. */
-	protected createEntry(surface: KeySurface, settings: ActionSettings, extra: unknown): NavEntry {
+	/** `extra` is the NavKind of the action; the check is a guard against a caller that bypasses the types. */
+	protected createEntry(surface: KeySurface, settings: ActionSettings, extra: NavKind | undefined): NavEntry {
+		if (!isNavKind(extra)) throw new Error(`unknown navigation key kind: ${String(extra).slice(0, 32)}`);
 		return {
 			surface,
 			settings,
 			unsubscribe: undefined,
-			kind: extra as NavKind,
+			kind: extra,
 			refreshing: false,
 			infoPage: 0,
 			paintedImage: undefined,

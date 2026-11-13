@@ -1,13 +1,14 @@
 /**
  * Messages between the Property Inspector (ui/*.html, ui/init/*.js) and the
  * plugin process. SDK-free and dependency-free so both sides and the tests can
- * import it. The PI cannot import TypeScript, so ui/init/*.js repeats the event
- * names as string literals; tests/pi-protocol.test.ts keeps both in sync.
+ * import it. The PI cannot import TypeScript, so ui/home-weather-pi.js repeats the event
+ * names as string literals; tests/pi-logic.test.ts keeps both in sync.
  *
  * Rules (see docs/ARCHITECTURE.md):
- *  - Secrets (client secret, refresh token, access token) travel PI -> plugin only,
- *    exactly once, in `setCredentials`. They are never sent back, never stored in
- *    Stream Deck settings and never logged.
+ *  - Secrets (client secret, refresh token) travel PI -> plugin only, once per attempt,
+ *    in `setCredentials` (id, secret, refresh token) or `startBrowserLogin` (id, secret).
+ *    They are never sent back, never stored in Stream Deck settings and never logged by
+ *    the plugin (at TRACE level the SDK itself logs every frame: SECURITY.md).
  *  - Every reply carries `event` so the PI can route it.
  */
 
@@ -26,6 +27,7 @@ export const PI_EVENTS = {
 	// plugin -> PI
 	accountStatus: "accountStatus",
 	credentialsResult: "credentialsResult",
+	clearResult: "clearResult",
 	browserLogin: "browserLogin",
 	globalSettings: "globalSettings",
 } as const;
@@ -43,6 +45,8 @@ export interface AccountStatus {
 	readonly lastUpdate?: string;
 	readonly stationCount?: number;
 	readonly moduleCount?: number;
+	/** state "ok" with a warning: data is current, but something needs attention (e.g. the renewed sign-in could not be saved). Shown by the PI in warning colour. */
+	readonly warning?: string;
 }
 
 export interface SetCredentialsMessage {
@@ -67,6 +71,14 @@ export interface CredentialsResultMessage {
 	readonly status: AccountStatus;
 }
 
+/** plugin -> PI: result of `clearCredentials`. ok:false means the stored file could NOT be removed. */
+export interface ClearResultMessage {
+	readonly event: typeof PI_EVENTS.clearResult;
+	readonly ok: boolean;
+	readonly error?: string;
+	readonly status: AccountStatus;
+}
+
 /** PI -> plugin: change plugin-wide settings (validated and clamped by the plugin). Reply: `globalSettings`. */
 export interface SetGlobalSettingsMessage {
 	readonly event: typeof PI_EVENTS.setGlobalSettings;
@@ -79,6 +91,8 @@ export interface GlobalSettingsMessage {
 	readonly event: typeof PI_EVENTS.globalSettings;
 	readonly pollIntervalSeconds: number;
 	readonly unitSystem: "account" | "metric" | "imperial";
+	/** Set when a requested change could not be saved (settings never loaded, write failed); the values above are then the ones still in effect. */
+	readonly error?: string;
 }
 
 export interface BrowserLoginMessage {
@@ -109,7 +123,7 @@ export interface DatasourceMessage {
 
 /** Per-action settings (stored by Stream Deck, plain JSON, no secrets). */
 export interface MeasurementSettings {
-	/** "<stationId>|<moduleId>" chosen in the PI; empty/undefined = adopt the first base station. */
+	/** "<stationId>|<moduleId>" chosen in the PI; absent (undefined) = adopt a module that reports the key's measurement on first use; "" = deliberately cleared, the key then shows "Pick module". */
 	moduleKey?: string;
 	metric?: string;
 	/** "auto" = follow the Netatmo account's unit preferences. */
@@ -138,3 +152,17 @@ export interface GlobalSettings {
 	unitSystem?: "account" | "metric" | "imperial";
 	[key: string]: unknown;
 }
+
+/** plugin -> PI: the closed set of messages the plugin may send. A secret-carrying shape does not belong to it. */
+export interface AccountStatusMessage {
+	readonly event: typeof PI_EVENTS.accountStatus;
+	readonly status: AccountStatus;
+}
+
+export type PluginToPiMessage =
+	| AccountStatusMessage
+	| CredentialsResultMessage
+	| ClearResultMessage
+	| BrowserLoginMessage
+	| GlobalSettingsMessage
+	| DatasourceMessage;

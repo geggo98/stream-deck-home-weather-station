@@ -86,7 +86,10 @@ export interface KeyControllerEnv extends ControllerEnv {
 
 const LOADING: ConnectionState = { kind: "loading" };
 
-export class KeyController extends ControllerBase<KeySurface, KeyEntry> {
+/** What an action id passes to `appear`: the metric it shows by default, or `{ metric, follow: true }` for the focus display. */
+export type KeyExtra = DisplayMetricId | { readonly metric: DisplayMetricId; readonly follow?: boolean };
+
+export class KeyController extends ControllerBase<KeySurface, KeyEntry, KeyExtra> {
 	private readonly overlayMs: number;
 
 	constructor(env: KeyControllerEnv) {
@@ -98,18 +101,18 @@ export class KeyController extends ControllerBase<KeySurface, KeyEntry> {
 	 * `extra` is what this action id shows when the PI has not picked another metric, or
 	 * `{ metric, follow: true }` for the focus display, which always follows the focus.
 	 */
-	override appear(surface: KeySurface, settings: ActionSettings, extra?: unknown): Promise<void> {
+	override appear(surface: KeySurface, settings: ActionSettings, extra?: KeyExtra): Promise<void> {
 		return super.appear(surface, settings, extra);
 	}
 
-	protected createEntry(surface: KeySurface, settings: ActionSettings, extra: unknown): KeyEntry {
-		const metric = typeof extra === "object" && extra !== null ? (extra as { metric?: unknown }).metric : extra;
+	protected createEntry(surface: KeySurface, settings: ActionSettings, extra: KeyExtra | undefined): KeyEntry {
+		const metric = typeof extra === "object" ? extra.metric : extra;
 		return {
 			surface,
 			settings,
 			unsubscribe: undefined,
-			defaultMetric: isDisplayMetricId(metric) ? metric : "temperature",
-			forceFollow: typeof extra === "object" && extra !== null && (extra as { follow?: unknown }).follow === true,
+			defaultMetric: metric !== undefined && isDisplayMetricId(metric) ? metric : "temperature",
+			forceFollow: typeof extra === "object" && extra.follow === true,
 			paintedImage: undefined,
 			paintedTitle: undefined,
 			titlePainted: false,

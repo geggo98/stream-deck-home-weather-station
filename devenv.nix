@@ -90,6 +90,10 @@
     # terminator literal) and each time the only symptom was "Bin 0 -> N bytes" in
     # the commit stat, which is easy to miss. A unicode escape is always
     # available, so there is never a reason to embed the raw byte.
+    # The same hook also rejects invisible Unicode format characters (bidirectional
+    # overrides and isolates, zero-width characters, the byte order mark inside a file):
+    # "Trojan Source" makes code read differently from what it executes, and a zero-width
+    # character in a literal is invisible in review. Write them as \u escapes.
     forbid-control-bytes = {
       enable = true;
       name = "forbid raw control bytes in sources";
@@ -99,7 +103,9 @@
       # directions — a file with a NUL is rejected, a clean one is not.
       entry = "${pkgs.writeShellScript "forbid-control-bytes" ''
         exec ${pkgs.python3}/bin/python3 - "$@" <<'PY'
-        import subprocess, sys
+        import re, subprocess, sys
+        # U+061C, U+200B-U+200F, U+2028/2029, U+202A-U+202E, U+2060-U+2069, U+FEFF
+        INVISIBLE = re.compile("[\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]")
         LEGAL = {0x09, 0x0a, 0x0d}  # tab, LF, CR
         EXT = (".ts", ".js", ".json", ".md", ".html", ".css", ".nix", ".yaml", ".yml")
         names = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=AM"],
@@ -108,6 +114,13 @@
         for name in (n for n in names if n.endswith(EXT)):
             blob = subprocess.run(["git", "show", f":{name}"], capture_output=True, check=True).stdout
             offenders = sorted({b for b in blob if b < 0x20 and b not in LEGAL} | ({0x7f} if 0x7f in blob else set()))
+            hidden = INVISIBLE.search(blob.decode("utf-8", errors="replace"))
+            if hidden:
+                line = blob.decode("utf-8", errors="replace")[:hidden.start()].count("\n") + 1
+                print(f"ERROR: {name}:{line} contains the invisible or bidirectional character "
+                      f"U+{ord(hidden.group()):04X}.", file=sys.stderr)
+                print("       Write it as a \\u escape instead.", file=sys.stderr)
+                status = 1
             if offenders:
                 where = blob.find(bytes([offenders[0]]))
                 line = blob[:where].count(b"\n") + 1

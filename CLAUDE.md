@@ -6,8 +6,7 @@ dials. Public repository, MIT, non-commercial. `AGENTS.md` is a symlink to this 
 
 Read first: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (the contract between layers),
 `src/adapter/station/types.ts` and `service.ts`, `src/pi-protocol.ts`. Other docs: SETUP, BRANDING,
-PUBLISHING, WEATHER-API (sourced API facts), RENDERING (artwork), FOCUS-AND-HISTORY (only a map from old
-section numbers to ARCHITECTURE.md), `SECURITY.md`, `CONTRIBUTING.md`.
+PUBLISHING, WEATHER-API (sourced API facts), RENDERING (artwork), `SECURITY.md`, `CONTRIBUTING.md`.
 
 ## Commands
 
@@ -23,7 +22,8 @@ npm run validate                      # streamdeck validate
 npm run pack                          # verify:manifest + streamdeck pack -> .streamDeckPlugin (git-ignored)
 npm run watch                         # dev loop; adds Nodejs.Debug "enabled" LOCALLY, never commit that
 npm run generate                      # icons + manifest from the action catalog
-npm run probe / capture:fixture       # real API, need secretspec credentials (see README); not run by CI
+npm run probe                         # real API, needs secretspec credentials (see README); not run by CI
+npm run capture:fixture -- <raw.json> # anonymises a raw probe capture; needs no secrets
 npm run scan:vulns                    # osv-scanner; accepted advisories with expiry are in osv-scanner.toml (SECURITY.md)
 ```
 
@@ -35,8 +35,9 @@ Only the plugin-layer owner runs `build`/`validate`/`pack` when several agents w
 src/plugin.ts            entry: registers actions, the single settings writer, wires the poller
 src/actions/*            SDK layer (key and dial actions); catalog.ts holds the plugin id
 src/focus/*              pure navigation over the focus (station, module, metric), auto-rotate, focus store; SDK-free
-src/render/*             pure: snapshot + settings + now -> SVG string / title / feedback
-src/adapter/station/*    SDK-FREE: credentials, token manager, HTTP client, parser, units, poller
+src/render/*             pure: snapshot + settings + now -> SVG string / title / feedback; display units (format.ts)
+                         and freshness/status (status.ts) live here
+src/adapter/station/*    SDK-FREE: credentials, token manager, HTTP client, parser, history, poller, browser sign-in
 src/pi-protocol.ts       event names and message shapes shared with the Property Inspector
 <plugin>.sdPlugin/ui/    Property Inspector: static HTML, ui/init/*.js, vendored sdpi-components
 scripts/*.ts             generators (manifest, icons), probe, fixture capture, version sync
@@ -73,13 +74,13 @@ tests/*.test.ts          flat directory, so the unquoted glob stays portable
    traffic (default 300 s, floor 60 s, jitter, backoff, `Retry-After`). What a key shows for stale, unreachable,
    auth-error or no-credentials is computed in the normal render from `ConnectionState` + `Freshness`; no second
    write path that could outlive an outage. Freshness comes from `measuredAt`, not from `reachable`.
-9. **Token rotation.** Netatmo invalidates the old refresh token at every refresh: single-flight refresh, try to persist atomically BEFORE returning the new access token (if both attempts fail the pair stays in memory, the poller publishes an `error` ConnectionState with `UNPERSISTED_ROTATION_MESSAGE`, shown only in the Property Inspector's account status (keys keep showing the last good data; the deck gives no signal), the write is retried on every poll, and a restart before a successful write means signing in again; see SECURITY.md; never describe this as "no silent fallback" or hide it), refresh early, treat `invalid_grant` / 403 code 30
+9. **Token rotation.** Netatmo invalidates the old refresh token at every refresh: single-flight refresh, try to persist atomically BEFORE returning the new access token (if both attempts fail the pair stays in memory, the poller publishes an `ok` ConnectionState with `warning: "unpersisted-rotation"` (text `UNPERSISTED_ROTATION_MESSAGE`), shown in the Property Inspector's status line AND as a warning marker on the keys (values stay at full opacity), the write is retried on every poll, and a restart before a successful write means signing in again; see SECURITY.md; never describe this as "no silent fallback" or hide it), refresh early, treat `invalid_grant` / 403 code 30
    as auth-error and stop polling. Never register webhooks (one URL per app would replace another client's).
 10. **Every SDK promise is caught** (`fireAndLog`): Node 24 treats an unhandled rejection as fatal, and a failed
     `registerAction` is swallowed by the uncaught-exception net while the process still exits 0, so the bundle test looks for
     a log marker, not an exit code, and has a negative control.
 11. **API strings never become SVG markup** (module and station names are user-controlled): keep them in the native
-    title or escape them. Quantise values to the displayed precision before composing, so `writeKeyImage`
+    title or escape them. Quantise values to the displayed precision before composing, so `writeKeyFace`
     de-duplication holds.
 12. **Property Inspector**: vendored sdpi-components (no CDN), CSP `script-src 'self'` (no inline script; init code
     in `ui/init/*.js`). `sdpi-select` only picks up `<option>`s added after it upgraded: use the datasource round
@@ -88,14 +89,19 @@ tests/*.test.ts          flat directory, so the unquoted glob stays portable
 13. **Silent-failure checks.** Unknown layout keys and missing image paths do nothing and log nothing; tests
     assert them. Validate a filter before trusting "no matches" (the hygiene test feeds a sample first).
 14. **Node test runner strips types only.** No enums, no constructor parameter properties, no namespaces; `.ts`
-    extension in every relative import; no raw control bytes in sources (use `\u0000`-style escapes).
+    extension in every relative import; no raw control bytes and no invisible or bidirectional characters
+    (U+200B-200F, U+202A-202E, U+2066-2069, U+FEFF) in sources: use `\u` escapes (a pre-commit hook and
+    `tests/repo-hygiene.test.ts` enforce it).
 15. **Toolchain pins.** TypeScript stays on 6.x: 7 type-checks but `rollup -c` dies in
     `@rollup/plugin-typescript`; see the comment in `.github/dependabot.yml` before touching it. Check bumps with
     `npm run build`, not `npm run typecheck`.
 16. **After a plugin crash loop** Stream Deck marks the plugin unstable and stops launching it;
     `streamdeck restart` does not clear that, restarting the Stream Deck app does (sibling-project observation).
 17. **CI hygiene.** Every action pinned to a full commit SHA with a `# vX.Y.Z` comment (`tests/workflows.test.ts`,
-    `pinact run --check`). Re-resolve SHAs via the GitHub API, not from memory.
+    `pinact run --check`). Re-resolve SHAs via the GitHub API, not from memory. The release workflow keeps the
+    write token away from everything that runs npm (build job read-only with `npm ci --ignore-scripts`; the upload
+    job has no checkout and no npm); `tests/workflows.test.ts` pins that. New actions need `scripts/github-settings.py`
+    (`--check`, then `--apply` after review).
 
 ## Brand and privacy rules (tests enforce the mechanical part)
 

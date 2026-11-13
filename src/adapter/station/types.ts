@@ -76,7 +76,7 @@ export interface StationData {
 
 /** Unit preferences of the Netatmo account (body.user.administrative). Display only. */
 export interface UnitPreferences {
-	/** 0 metric, 1 imperial */
+	/** The account's unit system (the API sends 0 = metric, 1 = imperial; parse.ts maps it). */
 	readonly unitSystem: "metric" | "imperial";
 	readonly windUnit: "kmh" | "mph" | "ms" | "beaufort" | "knots";
 	readonly pressureUnit: "mbar" | "inhg" | "mmhg";
@@ -93,14 +93,15 @@ export interface StationSnapshot {
 
 /**
  * Why the plugin currently cannot show fresh data. Computed by the poller from
- * errors and snapshot age; the renderers display it as a pure function of this
+ * errors and the time of the last fetch; the renderers display it as a pure function of this
  * value (see docs/ARCHITECTURE.md, "Status is a pure function").
  */
 export type ConnectionState =
 	| { readonly kind: "no-credentials" }
 	| { readonly kind: "loading" }
-	| { readonly kind: "ok" }
-	/** Last poll failed transiently (network, 5xx, 429); cached data is still shown, marked stale after the grace period. */
+	/** Data is current. `warning` is set while the renewed sign-in could not be persisted (the plugin keeps working, but a restart would need a new sign-in); it never dims data. */
+	| { readonly kind: "ok"; readonly warning?: "unpersisted-rotation" }
+	/** Last poll failed transiently (network, 5xx, 429); cached data is still shown, but dimmed at once (a single failed poll marks every key stale; there is no grace period, see src/render/status.ts). */
 	| { readonly kind: "error"; readonly message: string; readonly since: number; readonly retryAt: number }
 	/** The refresh token was rejected or revoked; the user must sign in again. Polling stops until credentials change. */
 	| { readonly kind: "auth-error"; readonly message: string; readonly since: number };
@@ -128,6 +129,8 @@ export interface WeatherSource {
 /** Subset of credentials the PI is allowed to know about. The values themselves never leave the plugin process. */
 export interface CredentialSummary {
 	readonly configured: boolean;
+	/** true when a credentials file exists but cannot be read or is corrupt (permissions, damaged JSON): different from "not set up". */
+	readonly unreadable?: boolean;
 	/** Last 4 characters of the client id, to let the user recognise which app is in use. */
 	readonly clientIdHint?: string;
 }
@@ -135,7 +138,7 @@ export interface CredentialSummary {
 /** Time window of the history key. */
 export type HistoryWindow = "6h" | "24h" | "3d";
 
-/** Metrics for which Netatmo's getmeasure can deliver a series (trends, min/max and angles cannot). */
+/** Metrics for which Netatmo's getmeasure can deliver a series (the display metrics Station pressure and Gusts have none). */
 export type HistoryMetric = "temperature" | "humidity" | "co2" | "noise" | "pressure" | "rain" | "windStrength";
 
 export interface HistoryRequest {

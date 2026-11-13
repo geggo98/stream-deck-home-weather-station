@@ -5,8 +5,9 @@
  *  - The refresh token ROTATES on every refresh, so a torn or lost write means a full
  *    re-authorisation. Writes are therefore atomic: temp file in the same directory,
  *    chmod 0600 before the rename, rename over the target.
- *  - A corrupt, partial, oversized or foreign file is "not configured", never a crash. The
- *    content is NOT logged (it may contain a secret); only the reason class is.
+ *  - A corrupt, partial, oversized or foreign file yields no credentials, never a crash. The
+ *    content is NOT logged (it may contain a secret); only the reason class is. `probe()`
+ *    reports that class, so the PI can tell "damaged or unreadable" from "not set up".
  *  - On Windows chmod is a no-op; the file then relies on the per-user %APPDATA% ACL.
  */
 
@@ -15,6 +16,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { type AdapterLogger, scopedLogger } from "../logging.ts";
 import { defaultDataDir } from "./paths.ts";
+import type { CredentialInput, LoginInput } from "./service.ts";
 
 export const CREDENTIALS_FILE_NAME = "credentials.json";
 /** A real file is ~400 bytes; anything above this is not ours. */
@@ -22,23 +24,42 @@ export const MAX_CREDENTIALS_FILE_BYTES = 16 * 1024;
 /** Real values are 24..64 characters; this bounds what we accept from the file or the PI. */
 export const MAX_FIELD_LENGTH = 512;
 
-export interface StoredCredentials {
+interface StoredCredentialsBase {
 	readonly clientId: string;
 	readonly clientSecret: string;
 	readonly refreshToken: string;
-	readonly accessToken?: string;
-	/** Epoch milliseconds. */
-	readonly accessTokenExpiresAt?: number;
 }
+
+/**
+ * The access token and its expiry belong together: both present or both absent (the file
+ * keeps them as two flat fields, so older files stay readable).
+ */
+export type StoredCredentials = StoredCredentialsBase &
+	(
+		| { readonly accessToken?: undefined; readonly accessTokenExpiresAt?: undefined }
+		| {
+				readonly accessToken: string;
+				/** Epoch milliseconds. */
+				readonly accessTokenExpiresAt: number;
+		  }
+	);
+
+/** Why a credentials file did not yield credentials, when it exists at all. */
+export type CredentialProblem = "unreadable" | "invalid";
 
 export interface CredentialStore {
 	/** undefined = not configured (missing, corrupt or invalid file). */
 	load(): Promise<StoredCredentials | undefined>;
+	/**
+	 * Like `load`, but says WHY nothing came back: no problem = simply not set up; "unreadable" =
+	 * the file exists but cannot be read (permissions); "invalid" = too large, not JSON, or foreign content.
+	 */
+	probe?(): Promise<{ readonly credentials?: StoredCredentials; readonly problem?: CredentialProblem }>;
 	save(credentials: StoredCredentials): Promise<void>;
 	clear(): Promise<void>;
 }
 
-function isCleanToken(value: unknown): value is string {
+export function isCleanToken(value: unknown): value is string {
 	// no whitespace or control characters: these values end up in headers and form bodies
 	return typeof value === "string" && value.length > 0 && value.length <= MAX_FIELD_LENGTH && !/[\s\u0000-\u001f\u007f]/.test(value);
 }
@@ -48,13 +69,59 @@ export function validateCredentials(raw: unknown): StoredCredentials | undefined
 	if (typeof raw !== "object" || raw === null) return undefined;
 	const r = raw as Record<string, unknown>;
 	if (!isCleanToken(r.clientId) || !isCleanToken(r.clientSecret) || !isCleanToken(r.refreshToken)) return undefined;
-	const base = { clientId: r.clientId, clientSecret: r.clientSecret, refreshToken: r.refreshToken };
+	const base: StoredCredentials = { clientId: r.clientId, clientSecret: r.clientSecret, refreshToken: r.refreshToken };
 	if (r.accessToken === undefined) return base;
 	if (!isCleanToken(r.accessToken)) return undefined;
 	const exp = r.accessTokenExpiresAt;
 	// a missing or nonsensical expiry only costs one extra refresh: drop the access token instead of failing
 	if (typeof exp !== "number" || !Number.isFinite(exp) || exp <= 0) return base;
 	return { ...base, accessToken: r.accessToken, accessTokenExpiresAt: exp };
+}
+
+export type ParsedInput<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: string };
+
+const FIELD_LABELS = { clientId: "client ID", clientSecret: "client secret", refreshToken: "refresh token" } as const;
+
+function parseField(raw: Record<string, unknown>, key: keyof typeof FIELD_LABELS): ParsedInput<string> {
+	const label = FIELD_LABELS[key];
+	const value = raw[key];
+	// leading and trailing whitespace comes from copy and paste; inside, it is a mistake
+	const trimmed = typeof value === "string" ? value.trim() : "";
+	if (trimmed.length === 0) return { ok: false, error: `The ${label} is required.` };
+	if (trimmed.length > MAX_FIELD_LENGTH) return { ok: false, error: `The ${label} is too long (at most ${MAX_FIELD_LENGTH} characters).` };
+	if (!isCleanToken(trimmed)) return { ok: false, error: `The ${label} contains spaces or control characters. Copy only the value itself.` };
+	return { ok: true, value: trimmed };
+}
+
+/**
+ * The ONE validation of what the Property Inspector sends: client ID, client secret and
+ * refresh token, each trimmed, non-empty, at most 512 characters, without inner whitespace
+ * or control characters. On failure `error` is complete user-facing text naming the first
+ * offending field ("too long" is told apart from "required"). Used by the router for the
+ * paste route and again by the service, so no path can skip it.
+ */
+export function parseCredentialInput(raw: unknown): ParsedInput<CredentialInput> {
+	const r = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+	const clientId = parseField(r, "clientId");
+	if (!clientId.ok) return clientId;
+	const clientSecret = parseField(r, "clientSecret");
+	if (!clientSecret.ok) return clientSecret;
+	const refreshToken = parseField(r, "refreshToken");
+	if (!refreshToken.ok) return refreshToken;
+	return { ok: true, value: { clientId: clientId.value, clientSecret: clientSecret.value, refreshToken: refreshToken.value } };
+}
+
+/**
+ * Same rules for the browser sign-in, which has no refresh token yet: client ID and client
+ * secret only. Checked BEFORE the browser opens, because the authorization code is single use.
+ */
+export function parseLoginInput(raw: unknown): ParsedInput<LoginInput> {
+	const r = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+	const clientId = parseField(r, "clientId");
+	if (!clientId.ok) return clientId;
+	const clientSecret = parseField(r, "clientSecret");
+	if (!clientSecret.ok) return clientSecret;
+	return { ok: true, value: { clientId: clientId.value, clientSecret: clientSecret.value } };
 }
 
 export interface FileCredentialStoreOptions {
@@ -79,29 +146,37 @@ export class FileCredentialStore implements CredentialStore {
 	}
 
 	async load(): Promise<StoredCredentials | undefined> {
+		return (await this.probe()).credentials;
+	}
+
+	async probe(): Promise<{ readonly credentials?: StoredCredentials; readonly problem?: CredentialProblem }> {
 		let text: string;
 		try {
 			const stat = await fs.stat(this.filePath);
 			if (!stat.isFile() || stat.size > MAX_CREDENTIALS_FILE_BYTES) {
 				this.log.warn(`credentials file ignored: not a regular file or larger than ${MAX_CREDENTIALS_FILE_BYTES} bytes`);
-				return undefined;
+				return { problem: "invalid" };
 			}
 			text = await fs.readFile(this.filePath, "utf8");
 		} catch (error) {
 			const code = (error as NodeJS.ErrnoException).code;
-			if (code !== "ENOENT") this.log.warn(`credentials file unreadable (${typeof code === "string" ? code : "error"})`);
-			return undefined;
+			if (code === "ENOENT") return {};
+			this.log.warn(`credentials file unreadable (${typeof code === "string" ? code : "error"})`);
+			return { problem: "unreadable" };
 		}
 		let parsed: unknown;
 		try {
 			parsed = JSON.parse(text);
 		} catch {
 			this.log.warn("credentials file ignored: not valid JSON (treated as not configured)");
-			return undefined;
+			return { problem: "invalid" };
 		}
 		const valid = typeof parsed === "object" && parsed !== null && (parsed as { version?: unknown }).version === 1 ? validateCredentials(parsed) : undefined;
-		if (!valid) this.log.warn("credentials file ignored: unexpected content (treated as not configured)");
-		return valid;
+		if (!valid) {
+			this.log.warn("credentials file ignored: unexpected content (treated as not configured)");
+			return { problem: "invalid" };
+		}
+		return { credentials: valid };
 	}
 
 	save(credentials: StoredCredentials): Promise<void> {
@@ -150,6 +225,7 @@ export class FileCredentialStore implements CredentialStore {
 		}
 	}
 
+	/** Rejects when the file exists but cannot be removed (the caller must not claim the credentials are gone). */
 	async clear(): Promise<void> {
 		const run = this.queue.then(() => fs.rm(this.filePath, { force: true }));
 		this.queue = run.catch(() => undefined);
@@ -160,7 +236,7 @@ export class FileCredentialStore implements CredentialStore {
 /** In-memory store: staging area for validating new credentials, and tests. */
 export class MemoryCredentialStore implements CredentialStore {
 	private current: StoredCredentials | undefined;
-	saveCount = 0;
+	private saves = 0;
 
 	constructor(initial?: StoredCredentials) {
 		this.current = initial;
@@ -170,13 +246,22 @@ export class MemoryCredentialStore implements CredentialStore {
 		return this.current;
 	}
 
+	/** True once `save` was called at least once (the staging store uses this to learn that a refresh happened). */
+	get wasSaved(): boolean {
+		return this.saves > 0;
+	}
+
+	get saveCount(): number {
+		return this.saves;
+	}
+
 	async load(): Promise<StoredCredentials | undefined> {
 		return this.current;
 	}
 
 	async save(credentials: StoredCredentials): Promise<void> {
 		this.current = credentials;
-		this.saveCount++;
+		this.saves++;
 	}
 
 	async clear(): Promise<void> {

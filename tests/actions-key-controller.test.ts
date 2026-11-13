@@ -134,7 +134,7 @@ describe("KeyController", () => {
 			const key = new RecordingKeySurface();
 			await controller.appear(key, { moduleKey: "" }, "temperature");
 			assert.equal(key.settingsWrites.length, 0);
-			assert.equal(key.lastTitle, "Pick module");
+			assert.equal(key.lastTitle, "Pick\nmodule");
 		});
 	});
 

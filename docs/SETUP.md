@@ -2,7 +2,8 @@
 
 Status of this guide: written from Netatmo's public documentation (fetched 2026-11-13) and
 from the design in [ARCHITECTURE.md](ARCHITECTURE.md). Nobody has run this procedure end to
-end with the finished plugin. The developer portal needs a login, so its current menu names
+end with the finished plugin. The developer portal needs a login. The maintainer saw its
+scope selector in November 2026 (section 2); the token generator and a redirect-URI field
 were not inspected. Steps that depend on portal behaviour are marked **[unverified]**.
 
 ## 1. Why your own app
@@ -50,8 +51,9 @@ plugin listens on the fixed loopback port 53682, so the redirect URI is
 settings (**[unverified]**: the portal's field names were not inspected, and Netatmo's
 documentation does not say whether loopback redirects are accepted). Then enter client id and
 client secret in the Property Inspector and press "Sign in with browser" (the Property
-Inspector also shows the address it uses). The plugin opens your browser, listens on the
-loopback address for one callback (at most three minutes) and exchanges the code.
+Inspector shows the same address). The plugin opens your browser, listens on the
+loopback address for one callback (at most three minutes) and exchanges the code. The secret
+field is cleared after the press; enter it again if you press a second time.
 
 Option A, paste a token pair **[unverified]**: the developer portal is said to be able to
 generate a token pair for your own app with scope `read_station`. Community projects
@@ -62,15 +64,20 @@ the portal (it needs a login). If it exists, paste client id, client secret and
 If neither works, please say so in an issue, quoting only the visible message and no secrets,
 tokens, MAC addresses or station names. That is the most useful help to verify this guide.
 
-When you save, the plugin performs one real token refresh and one station query. Only if both
-succeed are the credentials written to disk.
+When you save, the plugin performs one real token refresh and then one station query. The
+new token pair is written to disk as soon as the refresh succeeded, before the station query:
+if only the query fails, the tokens stay saved and the Property Inspector says "Saved, but ..."
+with the reason (a token without `read_station` gets the advice to create it again with only
+that scope). If the refresh fails, or the file cannot be written (disk full, no permission),
+nothing is claimed as saved and the message says which of the two it was. The browser route
+saves right after the code exchange in the same way.
 
 ## 4. Where the credentials are stored
 
 A JSON file named `credentials.json` in a per-user directory called `home-weather-station`,
 created with permission `0600` (owner read/write) and replaced atomically:
 
-| OS | Location (as designed; check the implementation if it matters) |
+| OS | Location (`src/adapter/station/paths.ts`) |
 |---|---|
 | macOS | `~/Library/Application Support/home-weather-station/` |
 | Windows | `%APPDATA%\home-weather-station\` |
@@ -81,10 +88,14 @@ exports or backups, **[unverified]**), and are dumped into log files at TRACE le
 (per the SDK behaviour documented in ARCHITECTURE.md).
 The file is **not encrypted**. Anyone who can read your user account's files can read it.
 On Windows the `0600` mode has no effect (the profile directory's access control list
-applies instead). See [../SECURITY.md](../SECURITY.md).
+applies instead; **[unverified]**, nobody has run the plugin on Windows). See
+[../SECURITY.md](../SECURITY.md).
 
-To remove everything: use the clear-credentials button in the Property Inspector, or delete the
-directory. Also revoke or delete the app in the developer portal if you stop using it.
+To remove everything: press the clear-credentials button in the Property Inspector (it asks for
+confirmation: press it twice; the status then shows "Removing..." until the file is gone, or the
+reason and the file's location if it could not be removed), or delete the directory. **Clear does
+not revoke anything at Netatmo**: the tokens stay valid there until they expire or you revoke or
+delete the app in the developer portal.
 
 ## 5. The rotation trap
 
@@ -93,11 +104,11 @@ token and the previous one stops working at once. Consequences:
 
 - The plugin writes the new pair to disk before it hands out the new access token. If that
   write fails (two attempts), it logs an error, carries on with the new pair in memory only
-  and shows the message "The renewed sign-in could not be saved to disk. Data is current,
+  and shows the warning "The renewed sign-in could not be saved to disk. Data is current,
   but after a restart you will have to sign in again." in the account status of the
-  Property Inspector only; the keys keep showing the last good data, so the deck itself
-  gives no signal. It retries the write on every poll
-  and the message disappears once a write succeeds. Until then, a restart of the plugin or
+  Property Inspector and as a warning marker on the keys (the keys keep their normal face and
+  are not dimmed). It retries the write on every poll
+  and the warning disappears once a write succeeds. Until then, a restart of the plugin or
   the machine loses the pair and you must authorise again. If the plugin or the
   machine dies in the middle of the write, you must authorise again as well.
 - **Never use the same app or refresh token in two programs** (this plugin and a home-automation
@@ -107,7 +118,8 @@ token and the previous one stops working at once. Consequences:
 - Copying `credentials.json` to a second computer has the same effect. Set up each computer
   separately with its own app.
 - If you test with the probe script (see the README), it consumes the refresh token you give
-  it and prints or stores the replacement; do not run it with the token the plugin uses.
+  it and stores the replacement; if it cannot store it, it exits with an error saying so, because
+  the old token is then invalid. Do not run it with the token the plugin uses.
 - Auth errors stop polling on purpose: retrying a rejected token only burns the rate limit.
 
 ## 6. Rate limits and polling
@@ -117,7 +129,8 @@ Netatmo's documented limits are 50 requests per 10 seconds and 500 per hour per 
 inference). The plugin polls once for all keys, every 5 minutes by default, never faster than
 once per minute. Netatmo stations update about every 10 minutes, so faster polling only
 repeats the same values. History keys (24 h curve) share this budget: they fetch only while visible, cache each
-curve for 10 minutes and make at most one real request per key per 30 seconds. The plugin
+curve for 10 minutes and make at most one real request per curve per 30 seconds (a failed
+request is not retried sooner). The plugin
 stays far below 500 per hour (the numbers are UNVERIFIED for the weather API). The plugin never registers webhooks: an app has only one webhook
 URL and registering one would replace another client's.
 

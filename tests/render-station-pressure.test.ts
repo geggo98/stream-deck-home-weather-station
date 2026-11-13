@@ -1,12 +1,12 @@
 /**
- * "Station pressure" (the API's second pressure field) is a real, selectable display metric.
+ * "Pressure (alt.)" (the API's second pressure field) is a real, selectable display metric.
  * The label and colour make no claim about which of the two pressures is the sea-level one:
  * that is UNVERIFIED (docs/WEATHER-API.md).
  */
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import { metricItems } from "../src/actions/pi-router.ts";
-import { accentFor, NEUTRAL_COLOUR, pressureColour, STATION_PRESSURE_COLOUR } from "../src/render/colour.ts";
+import { accentFor, NEUTRAL_COLOUR, pressureColour, ALT_PRESSURE_COLOUR } from "../src/render/colour.ts";
 import { buildDialFeedback } from "../src/render/dial-feedback.ts";
 import { buildKeyView } from "../src/render/key-view.ts";
 import { DIAL_METRIC_ORDER, DISPLAY_METRIC_IDS, isDisplayMetricId, METRICS, metricsReportedBy } from "../src/render/metrics.ts";
@@ -34,11 +34,11 @@ describe("absolutePressure display metric", () => {
 		assert.deepEqual(new Set(DIAL_METRIC_ORDER), new Set(DISPLAY_METRIC_IDS), "every metric is in the dial order");
 		assert.ok(metricsReportedBy(baseModule().values).includes("absolutePressure"));
 		assert.ok(!metricsReportedBy({ pressure: 1010 }).includes("absolutePressure"));
-		assert.ok(metricItems(snapshot, { moduleKey }).some((i) => i.value === "absolutePressure" && i.label === "Station pressure"));
+		assert.ok(metricItems(snapshot, { moduleKey }).some((i) => i.value === "absolutePressure" && i.label === "Pressure (alt.)"));
 	});
 
 	it("has a neutral label that does not say sea level", () => {
-		assert.equal(METRICS.absolutePressure.label, "Station pressure");
+		assert.equal(METRICS.absolutePressure.label, "Pressure (alt.)");
 		assert.doesNotMatch(METRICS.absolutePressure.label + METRICS.pressure.label, /sea|absolute/i);
 	});
 
@@ -57,8 +57,8 @@ describe("absolutePressure display metric", () => {
 	});
 
 	it("has no value-dependent colour, while the other pressure keeps its bands", () => {
-		assert.equal(accentFor("absolutePressure", 900), STATION_PRESSURE_COLOUR);
-		assert.equal(accentFor("absolutePressure", 1040), STATION_PRESSURE_COLOUR);
+		assert.equal(accentFor("absolutePressure", 900), ALT_PRESSURE_COLOUR);
+		assert.equal(accentFor("absolutePressure", 1040), ALT_PRESSURE_COLOUR);
 		assert.equal(accentFor("absolutePressure", Number.NaN), NEUTRAL_COLOUR);
 		assert.notEqual(pressureColour(990), pressureColour(1030));
 	});
@@ -74,7 +74,7 @@ describe("absolutePressure display metric", () => {
 		// 850 hPa is roughly 1500 m above sea level; below the range the bar is clamped, not broken.
 		assert.ok(METRICS.absolutePressure.gauge.min <= 850);
 		const dial = buildDialFeedback({ ...input(), showMinMax: false });
-		assert.equal(dial.title.value, "Station pressure");
+		assert.equal(dial.title.value, "Pressure (alt.)");
 		assert.ok(dial.indicator.value > 0 && dial.indicator.value < 100);
 	});
 });

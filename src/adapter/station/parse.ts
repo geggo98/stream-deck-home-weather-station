@@ -104,12 +104,16 @@ export function cleanText(value: unknown, maxLength = MAX_NAME_LENGTH): string |
 	return [...stripped].slice(0, maxLength).join("");
 }
 
-/** Ids come with stray spaces in some responses (pyatmo `fix_id` strips them). */
+/**
+ * Ids come with stray spaces in some responses (pyatmo `fix_id` strips them). A `|` is refused:
+ * the plugin joins station and module id with it ("<station>|<module>", the module key of the
+ * settings and the history cache key), so an id containing it could not be told apart.
+ */
 function cleanId(value: unknown): string | undefined {
 	if (typeof value !== "string") return undefined;
 	// eslint-disable-next-line no-control-regex
 	const id = value.replace(/[\s\u0000-\u001f\u007f]/g, "");
-	return id.length > 0 && id.length <= MAX_ID_LENGTH ? id : undefined;
+	return id.length > 0 && id.length <= MAX_ID_LENGTH && !id.includes("|") ? id : undefined;
 }
 
 export function parseMetrics(dashboard: unknown, warn?: (message: string) => void): MetricValues {
@@ -230,7 +234,9 @@ export function parseStationsResponse(
 		throw new NetatmoError("protocol", "The response has no body object");
 	}
 	const body = json.body;
-	const devices = Array.isArray(body.devices) ? body.devices : [];
+	const hasDevicesArray = Array.isArray(body.devices);
+	const devices: unknown[] = Array.isArray(body.devices) ? body.devices : [];
+	if (!hasDevicesArray) options.warn?.("the response body has no `devices` array");
 	const stations: StationData[] = [];
 	const seen = new Set<string>();
 	for (const device of devices.slice(0, MAX_STATIONS)) {
@@ -241,5 +247,14 @@ export function parseStationsResponse(
 		}
 	}
 	if (devices.length > MAX_STATIONS) options.warn?.(`ignored ${devices.length - MAX_STATIONS} stations above the limit`);
+	// "ok, 0 stations" is only believable for a genuinely empty account (`devices: []`). A renamed
+	// or missing array, or devices of which none could be understood, would otherwise look like
+	// "no stations" forever.
+	if (stations.length === 0 && (devices.length > 0 || (!hasDevicesArray && Object.keys(body).length > 0))) {
+		throw new NetatmoError(
+			"protocol",
+			hasDevicesArray ? "None of the stations in the response could be understood" : "The response has no list of stations",
+		);
+	}
 	return { fetchedAt, stations, preferences: parsePreferences(body.user) };
 }

@@ -80,7 +80,7 @@ export const METRICS: Readonly<Record<DisplayMetricId, MetricDef>> = {
 	// bands (their thresholds only make sense for one kind of pressure).
 	absolutePressure: {
 		id: "absolutePressure",
-		label: "Station pressure",
+		label: "Pressure (alt.)",
 		kind: "pressure",
 		source: "absolutePressure",
 		glyph: "gauge",
@@ -134,7 +134,7 @@ export function gaugePercent(metric: MetricDef, value: number): number {
 
 /**
  * Which series Netatmo's getmeasure can deliver for a display metric. Metrics without an entry
- * (station pressure, gusts) have no history. Every rain face draws the same series: rain per bucket.
+ * (alternative pressure, gusts) have no history. Every rain face draws the same series: rain per bucket.
  */
 export const HISTORY_METRIC: Readonly<Partial<Record<DisplayMetricId, HistoryMetric>>> = {
 	temperature: "temperature",

@@ -48,7 +48,7 @@ describe("navigation keys", () => {
 		const next = await key(nav, "next-metric");
 		const prev = await key(nav, "prev-metric");
 		assert.equal(next.lastTitle, "→ Humidity");
-		assert.equal(prev.lastTitle, "← Station pressure");
+		assert.equal(prev.lastTitle, "← Pressure (alt.)");
 		nav.press(next.id);
 		assert.equal(store.get()?.metric, "humidity");
 		assert.equal(next.lastTitle, "→ CO2", "the preview follows the focus");
@@ -81,14 +81,14 @@ describe("navigation keys", () => {
 	it("is dimmed and flashes the alert when there is nowhere to go (one station, one sensor)", async () => {
 		const { nav, store, writes } = setup(makeSnapshot());
 		const station = await key(nav, "next-station");
-		assert.equal(station.lastTitle, "One station");
+		assert.equal(station.lastTitle, "One\nstation");
 		assert.match(decodeSvg(station.lastImage), /<svg/);
 		nav.press(station.id);
 		assert.equal(station.alerts, 1);
 		const sensor = await key(nav, "next-sensor");
 		const co2 = { ...here, metric: "co2" as const };
 		store.set(co2);
-		assert.equal(sensor.lastTitle, "No other sensor", "only the base reports CO2");
+		assert.equal(sensor.lastTitle, "No other\nsensor", "only the base reports CO2");
 		nav.press(sensor.id);
 		assert.equal(sensor.alerts, 1);
 		await settle();
@@ -292,5 +292,56 @@ describe("auto rotate and the settings writes", () => {
 		assert.equal(writes.length, before + 1, "one write when it stops");
 		assert.equal((writes.at(-1)?.focus as Focus).metric, store.get()?.metric);
 		void source;
+	});
+});
+
+describe("the previous keys go the other way (with three of each, +1 and -1 land on different entries)", () => {
+	const extraId = "00:00:5e:00:53:05";
+	const threeSensors = makeSnapshot([
+		baseModule(),
+		{ ...baseModule(), id: OUTDOOR_ID, role: "outdoor", name: "Garden", values: { temperature: 8, humidity: 80 } },
+		{ ...baseModule(), id: extraId, role: "indoor-extra", name: "Bedroom", values: { temperature: 19, humidity: 50 } },
+	]);
+	const thirdId = "00:00:5e:00:53:21";
+	const two = makeTwoStationSnapshot();
+	const threeStations = { ...two, stations: [...two.stations, { id: thirdId, name: "Third Station", modules: [baseModule({ id: thirdId, name: "Cellar", values: { temperature: 12 } })] }] };
+
+	it("previous sensor: from the middle sensor to the first, from the first around to the last", async () => {
+		const { nav, store } = setup(threeSensors, { ...here, moduleId: OUTDOOR_ID });
+		const prev = await key(nav, "prev-sensor");
+		const next = await key(nav, "next-sensor");
+		assert.equal(prev.lastTitle, "← Living r…");
+		assert.equal(next.lastTitle, "→ Bedroom");
+		nav.press(prev.id);
+		assert.equal(store.get()?.moduleId, BASE_ID);
+		nav.press(prev.id);
+		assert.equal(store.get()?.moduleId, extraId, "wraps backwards");
+	});
+
+	it("previous station: from the first station around to the last, and next goes forward", async () => {
+		const { nav, store } = setup(threeStations);
+		const prev = await key(nav, "prev-station");
+		const next = await key(nav, "next-station");
+		assert.equal(prev.lastTitle, "← Third St…");
+		assert.equal(next.lastTitle, "→ Second S…");
+		nav.press(prev.id);
+		assert.equal(store.get()?.stationId, thirdId);
+		nav.press(prev.id);
+		assert.equal(store.get()?.stationId, STATION_B_ID);
+	});
+
+	it("previous value: wraps to the last value the sensor reports", async () => {
+		const { nav, store } = setup(threeSensors);
+		const prev = await key(nav, "prev-metric");
+		nav.press(prev.id);
+		assert.equal(store.get()?.metric, "absolutePressure");
+	});
+});
+
+describe("the controller guards the kind it is given", () => {
+	it("refuses an unknown navigation kind instead of painting a face for it", async () => {
+		const { nav } = setup();
+		assert.throws(() => void nav.appear(new RecordingKeySurface("bogus"), {}, "teleport" as NavKind), /unknown navigation key kind: teleport/);
+		assert.equal(nav.size, 0, "nothing was tracked");
 	});
 });

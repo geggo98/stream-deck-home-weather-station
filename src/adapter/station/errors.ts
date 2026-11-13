@@ -11,6 +11,8 @@
  *                 oversized body, unexpected status). Treated like transient by the poller.
  */
 
+import type { AdapterLogger } from "../logging.ts";
+
 export type NetatmoErrorKind = "auth" | "rate-limited" | "transient" | "protocol";
 
 export interface NetatmoErrorDetails {
@@ -46,7 +48,23 @@ export function isNetatmoError(value: unknown): value is NetatmoError {
  * Wrap anything thrown into a NetatmoError with a generic, safe message. The original
  * message of a foreign error may contain URLs or response fragments, so it is dropped.
  */
-export function toNetatmoError(value: unknown): NetatmoError {
+export function toNetatmoError(value: unknown, log?: AdapterLogger): NetatmoError {
 	if (value instanceof NetatmoError) return value;
+	// The user-facing message stays generic, but the cause must not vanish: a programming error
+	// (TypeError in a parser, say) would otherwise look like "Unexpected internal error" forever.
+	// The logger the caller passes is the redacting one, so URLs or tokens inside the message are masked.
+	log?.error(`unexpected error: ${describeUnexpected(value)}`);
 	return new NetatmoError("transient", "Unexpected internal error");
+}
+
+/** One line: name, message and the first stack frames of a foreign error (never the object itself, it may carry request data). */
+export function describeUnexpected(value: unknown): string {
+	if (!(value instanceof Error)) return `non-error value of type ${typeof value}`;
+	const frames = (value.stack ?? "")
+		.split("\n")
+		.slice(1, 5)
+		.map((f) => f.trim())
+		.join(" <- ");
+	const code = (value as NodeJS.ErrnoException).code;
+	return `${value.name}: ${value.message}${typeof code === "string" ? ` (code ${code})` : ""}${frames ? ` @ ${frames}` : ""}`;
 }

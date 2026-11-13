@@ -13,7 +13,7 @@ function router(service: FakeService, settings: { moduleKey: string }) {
 	const r = createPiRouter({
 		getService: () => service,
 		reply: async (payload) => {
-			sent.push(payload);
+			sent.push({ ...payload });
 		},
 		openUrl: async () => {},
 		getActionSettings: () => settings,

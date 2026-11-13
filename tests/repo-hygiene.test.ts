@@ -398,6 +398,40 @@ function isIgnored(rel: string): boolean {
 	}
 }
 
+// ---- Trojan Source: invisible and bidirectional characters ------------------------------------
+
+// U+061C, U+200B-U+200F, U+2028/2029, U+202A-U+202E, U+2060-U+2069, U+FEFF
+const INVISIBLE = /[\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/u;
+const TEXT_EXT = new Set([".ts", ".js", ".mjs", ".json", ".md", ".html", ".css", ".nix", ".yaml", ".yml", ".toml", ".py"]);
+
+test("scanner validation: every invisible or bidirectional class is detected", () => {
+	for (const cp of [0x061c, 0x200b, 0x200d, 0x200e, 0x200f, 0x2028, 0x202a, 0x202e, 0x2060, 0x2066, 0x2069, 0xfeff]) {
+		assert.match(`const a = "x${String.fromCodePoint(cp)}y";`, INVISIBLE, `U+${cp.toString(16)} not detected`);
+	}
+	assert.doesNotMatch("const a = \"x\\u202ey\"; // escaped, visible", INVISIBLE);
+	assert.doesNotMatch("Gr\u00f6\u00dfe \u2013 \u00b0C", INVISIBLE, "ordinary non-ASCII text stays legal");
+});
+
+test("no source or doc contains invisible or bidirectional characters (write them as \\u escapes)", () => {
+	const problems: string[] = [];
+	let seen = 0;
+	for (const rel of listFiles()) {
+		if (!TEXT_EXT.has(extname(rel).toLowerCase()) || skipped(rel)) continue;
+		seen++;
+		const text = readFileSync(join(root, rel), "utf8");
+		const m = INVISIBLE.exec(text);
+		if (m) problems.push(`${rel}:${text.slice(0, m.index).split("\n").length} U+${m[0].codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`);
+	}
+	assert.ok(seen > 80, `only ${seen} text files seen, the scan may be blind`);
+	assert.deepEqual(problems, []);
+});
+
+test("the pre-commit hook rejects the same characters", () => {
+	const nix = readRoot("devenv.nix");
+	assert.match(nix, /INVISIBLE = re\.compile\(/);
+	for (const part of ["\\u202a-\\u202e", "\\u2060-\\u2069", "\\u200b-\\u200f", "\\ufeff"]) assert.ok(nix.includes(part), `hook lacks ${part}`);
+});
+
 test(".envrc is part of the repository (not ignored), .gitignore covers raw captures and generated licence files", () => {
 	assert.ok(existsSync(join(root, ".envrc")), ".envrc is missing");
 	assert.equal(isIgnored(".envrc"), false, "a fresh clone needs .envrc; direnv allow is documented");
@@ -443,6 +477,52 @@ test("docs make no claim that review found false", () => {
 	assert.match(readRoot("SECURITY.md"), /keeps the new pair in memory/);
 });
 
+// ---- claims the third review found false ----------------------------------------------------
+
+test("docs: getmeasure type names, units/freshness location, budget numbers and security statements", () => {
+	const readme = readRoot("README.md");
+	const arch = readRoot("docs/ARCHITECTURE.md");
+	const sec = readRoot("SECURITY.md");
+	const setup = readRoot("docs/SETUP.md");
+	// the request sends the spec's lowercase type names
+	assert.doesNotMatch(readme, /letter case from the spelling/);
+	assert.doesNotMatch(arch, /temperature to Temperature|WindStrength\./);
+	assert.match(arch, /`windstrength`/);
+	// the poller is not the only component that talks to the API; units and freshness are not adapter code
+	assert.doesNotMatch(arch, /owns the only network traffic/);
+	assert.doesNotMatch(arch, /units, freshness, poller/);
+	assert.doesNotMatch(arch, /writeKeyImage/);
+	assert.match(arch, /history-strip\.json/);
+	assert.match(arch, /BUDGET_POLLER_RESERVE/);
+	assert.doesNotMatch(arch, /No new secret-carrying message/);
+	// histories exist for all but two metrics
+	assert.doesNotMatch(readme, /trends, min\/max and angles do not/);
+	// the rotated pair is saved as soon as the refresh worked, not only when the data load worked too
+	assert.doesNotMatch(setup, /Only if both\s+succeed are the credentials written/);
+	assert.doesNotMatch(readme, /checks them with one real request before it\s+keeps anything/i);
+	assert.match(setup, /Saved, but/);
+	// Clear and revocation, the fixed port, the credential messages
+	assert.match(setup, /Clear does\s+not revoke anything at Netatmo/);
+	assert.match(sec, /does not revoke the tokens at Netatmo/);
+	assert.match(sec, /startBrowserLogin/);
+	assert.match(sec, /TRACE[^.]*frame/i);
+	assert.match(sec, /\[::1\]/);
+	assert.doesNotMatch(sec, /Secrets cross the Property Inspector exactly once/);
+	// provenance: claimed only as far as the workflow does it, and marked unverified
+	assert.match(sec, /attest/i);
+	assert.doesNotMatch(sec, /\(\*\*not implemented\*\*\)/);
+	assert.match(sec.replace(/\s+/g, " "), /\*\*\[unverified\]\*\*: no release exists yet/);
+	// no maintainer-specific or ticket-like repository slug in the dry-run example
+	assert.match(readRoot("docs/PUBLISHING.md"), /--repo-url=<owner>\/<repo>/);
+	assert.match(readRoot("docs/PUBLISHING.md").replace(/\s+/g, " "), /expected to install it \*\*\[unverified\]\*\*/);
+	// README: the nav-key faces, the build route that needs devenv
+	for (const face of ["One station", "No other sensor", "Only one value", "No module"]) assert.ok(readme.includes(`\`${face}\``), `README troubleshooting lacks ${face}`);
+	assert.match(readme, /npm i -g tsx/);
+	// NOTICE lists what the bundle really inlines
+	const notice = readRoot("NOTICE");
+	for (const pkg of ["@elgato/streamdeck", "@elgato/schemas", "@elgato/utils", "ws ", "zod", "tslib"]) assert.ok(notice.includes(pkg), `NOTICE lacks ${pkg}`);
+});
+
 // ---- decisions of the focus/history change ---------------------------------------------------
 
 test("docs describe the real persist-failure behaviour and the redaction limit", () => {
@@ -461,18 +541,29 @@ test("README states what reload can and cannot do", () => {
 	const readme = readRoot("README.md");
 	assert.match(readme, /cannot force the station to measure/);
 	assert.match(readme, /about every 10 minutes/);
-	for (const word of ["Reload", "Next value", "Next sensor", "Next station", "Auto rotate", "Info", "24 h history", "Alerts", "Dial"]) {
+	// the names users see in the Stream Deck app (manifest Name), including the seven measurement keys
+	for (const word of ["Temperature, Humidity, CO2", "Focus Display", "Reload", "Next Value", "Next Sensor", "Next Station", "Auto Rotate", "Data Age and Battery", "History", "Weather Dial"]) {
 		assert.ok(readme.includes(`| ${word}`), `README actions table lacks ${word}`);
 	}
+	assert.match(readme, /Alerts are not an action/);
+	assert.match(readme, /Every action has the account section/);
 });
 
 test("the focus and history design lives only in ARCHITECTURE.md", () => {
 	const arch = readRoot("docs/ARCHITECTURE.md");
 	for (const h of ["## Focus and navigation", "## History", "## API budget"]) assert.ok(arch.includes(h), `ARCHITECTURE.md lacks ${h}`);
 	assert.match(arch, /500 requests per hour/);
-	const pointer = readRoot("docs/FOCUS-AND-HISTORY.md");
-	assert.ok(pointer.split("\n").length < 16, "FOCUS-AND-HISTORY.md must stay a pointer");
-	for (const h of ["Focus and navigation", "History", "Settings"]) assert.ok(pointer.includes(h), `pointer lacks the map entry for ${h}`);
+	// the former pointer file is gone; nothing may cite it or its section numbers any more
+	assert.equal(existsSync(join(root, "docs/FOCUS-AND-HISTORY.md")), false, "docs/FOCUS-AND-HISTORY.md was deleted on purpose");
+	let seen = 0;
+	const citing: string[] = [];
+	for (const rel of listFiles()) {
+		if (skipped(rel) || !TEXT_EXT.has(extname(rel).toLowerCase())) continue;
+		seen++;
+		if (rel !== "tests/repo-hygiene.test.ts" && readFileSync(join(root, rel), "utf8").includes("FOCUS-AND-HISTORY")) citing.push(rel);
+	}
+	assert.ok(seen > 80, `only ${seen} text files seen, the scan may be blind`);
+	assert.deepEqual(citing, []);
 });
 
 test("secretspec.toml carries the verified provider sequence and marks 1Password UNVERIFIED", () => {
@@ -490,10 +581,13 @@ test("docs describe what the code does: info key, status rows, rotation message 
 	assert.doesNotMatch(readme, /radio signal \(if/i);
 	assert.doesNotMatch(arch, /signal \(if reported\)/i);
 	assert.match(readme, /Data Age and Battery/);
-	// the unsaved-rotation message lives only in the Property Inspector
+	// the unsaved-rotation warning: status line of the Property Inspector AND a marker on the keys
 	for (const f of ["README.md", "SECURITY.md", "docs/SETUP.md", "docs/ARCHITECTURE.md", "CLAUDE.md"]) {
-		assert.match(readRoot(f), /Property Inspector/, f);
-		assert.match(readRoot(f).replace(/\s+/g, " "), /deck itself gives no signal|keys keep showing the last good data/, `${f} must say where the message appears`);
+		const text = readRoot(f).replace(/\s+/g, " ");
+		assert.match(text, /Property Inspector/, f);
+		assert.match(text, /warning marker/, `${f} must say that the keys carry a warning marker`);
+		assert.doesNotMatch(text, /deck itself gives no signal|gives no signal/, `${f} states the old behaviour (message only in the Property Inspector)`);
+		assert.doesNotMatch(text, /`error` (?:ConnectionState|connection state)/, `${f} describes the old error encoding of the rotation warning`);
 	}
 	assert.doesNotMatch(readme, /\| Key shows a message that the renewed sign-in/);
 	// status table rows

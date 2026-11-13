@@ -138,6 +138,7 @@ export function buildHistoryView(input: HistoryViewInput): HistoryView {
 		bars,
 		accent: accentFor(input.metric, bars ? points.reduce((sum, p) => sum + p.v, 0) : newest.v),
 		dim: classification.stale,
+		notice: classification.warning && !classification.stale,
 		size: input.strip ? { ...input.strip, tile: false } : undefined,
 	};
 	const windowLabel = HISTORY_WINDOW_LABEL[input.window];

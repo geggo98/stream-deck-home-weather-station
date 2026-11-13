@@ -2,7 +2,7 @@
  * The history one visible action shows: what was asked, what came back, when to ask again.
  * SDK-free. One slot per action (key or dial), owned by its controller entry.
  *
- * Rules (docs/FOCUS-AND-HISTORY.md, section 4):
+ * Rules:
  *  - a request is made only while the action is visible: the slot exists between appear and
  *    disappear and goes quiet (`dispose`) afterwards, even for a request still in flight;
  *  - a successful result is kept for the service's cache time (10 minutes) before asking

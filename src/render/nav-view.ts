@@ -11,23 +11,30 @@ import type { ConnectionState, ModuleData, ModuleRole, StationSnapshot } from ".
 import { locate, nextMetric, nextModule, nextStation, type Direction, type Focus, type NavResult } from "../focus/navigate.ts";
 import { ERROR_COLOUR, NEUTRAL_COLOUR, WARNING_COLOUR } from "./colour.ts";
 import type { GlyphName } from "./glyph-names.ts";
-import { statusFace } from "./key-view.ts";
+import { statusFaceOf } from "./key-view.ts";
 import { METRICS } from "./metrics.ts";
 import { displayMetricOf } from "../focus/navigate.ts";
-import { classifyConnection, formatAgeLong, hasCachedError, STALE_AFTER_MS } from "./status.ts";
-import { composeTile } from "./tile.ts";
+import { classifyConnection, formatAgeLong, hasCachedError, hasWarning, STALE_AFTER_MS } from "./status.ts";
+import { composeTile, type TileStatus } from "./tile.ts";
 import { cleanLabel, joinLines } from "./title.ts";
 
-export type NavKind =
-	| "refresh"
-	| "next-metric"
-	| "prev-metric"
-	| "next-sensor"
-	| "prev-sensor"
-	| "next-station"
-	| "prev-station"
-	| "auto-rotate"
-	| "info";
+export const NAV_KINDS = [
+	"refresh",
+	"next-metric",
+	"prev-metric",
+	"next-sensor",
+	"prev-sensor",
+	"next-station",
+	"prev-station",
+	"auto-rotate",
+	"info",
+] as const;
+
+export type NavKind = (typeof NAV_KINDS)[number];
+
+export function isNavKind(value: unknown): value is NavKind {
+	return typeof value === "string" && (NAV_KINDS as readonly string[]).includes(value);
+}
 
 export type InfoPage = "age" | "battery";
 
@@ -121,16 +128,18 @@ export function buildNavView(input: NavViewInput): NavView {
 	const glyph = KIND_GLYPH[input.kind];
 	const overriding = classifyConnection(input.hasSource, input.connection, input.snapshot);
 	if (overriding) {
-		const face = statusFace({ kind: overriding }, glyph)!;
+		const face = statusFaceOf(overriding, glyph);
 		return { svg: face.svg, title: face.title, blocked: true };
 	}
+	// Data is current but the renewed sign-in could not be saved: a dot on every live face, nothing dimmed.
+	const okStatus: TileStatus = hasWarning(input.connection) ? "notice" : "ok";
 	const snapshot = input.snapshot;
 	if (!snapshot || !input.focus) return dimmed(glyph, "No data");
 	const at = locate(snapshot, input.focus);
 
 	if (input.kind === "auto-rotate") {
 		return input.autoRotateOn
-			? { svg: composeTile({ glyph: "repeat", accent: ON_ACCENT, status: "ok" }), title: `On\n${input.autoRotateSeconds ?? 8} s`, blocked: false }
+			? { svg: composeTile({ glyph: "repeat", accent: ON_ACCENT, status: okStatus }), title: `On\n${input.autoRotateSeconds ?? 8} s`, blocked: false }
 			: { svg: composeTile({ glyph: "pause", accent: NEUTRAL_COLOUR, dim: true, status: "idle" }), title: "Off", blocked: false };
 	}
 
@@ -139,7 +148,7 @@ export function buildNavView(input: NavViewInput): NavView {
 		const measuredAt = at.module.measuredAt;
 		const ageMs = Math.max(0, input.now - (measuredAt ?? snapshot.fetchedAt));
 		const stale = ageMs > STALE_AFTER_MS || hasCachedError(input.connection);
-		const tileStatus = stale ? "stale" : "ok";
+		const tileStatus = stale ? "stale" : okStatus;
 		if (input.kind === "refresh") {
 			return {
 				svg: composeTile({ glyph: input.refreshing ? "loader" : "refresh-cw", accent: NAV_ACCENT, dim: stale && !input.refreshing, status: input.refreshing ? "idle" : tileStatus }),
@@ -150,10 +159,10 @@ export function buildNavView(input: NavViewInput): NavView {
 		const pages = infoPages(at.module);
 		const page = pages[(input.infoPage ?? 0) % pages.length]!;
 		const name = cleanLabel(at.module.name);
-		if (page === "battery") {
-			const percent = at.module.batteryPercent!;
+		const percent = at.module.batteryPercent;
+		if (page === "battery" && typeof percent === "number") {
 			return {
-				svg: composeTile({ glyph: batteryGlyph(percent), accent: batteryAccent(percent), status: "ok" }),
+				svg: composeTile({ glyph: batteryGlyph(percent), accent: batteryAccent(percent), status: okStatus }),
 				title: joinLines([`${Math.round(percent)} %`, name]),
 				blocked: false,
 			};
@@ -166,27 +175,27 @@ export function buildNavView(input: NavViewInput): NavView {
 	}
 
 	const preview = navigationPreview(input.kind, snapshot, input.focus);
-	if (!preview) return dimmed(glyph, "No data");
-	const dir = DIRECTION[input.kind]!;
+	const dir = DIRECTION[input.kind];
+	if (!preview || dir === undefined) return dimmed(glyph, "No data");
 	const arrow = ARROW[dir];
 	const target = locate(snapshot, preview.focus);
 	if (input.kind === "next-metric" || input.kind === "prev-metric") {
 		const id = displayMetricOf(preview.focus.metric);
 		const def = id ? METRICS[id] : undefined;
-		if (preview.blocked || !def) return dimmed(def?.glyph ?? glyph, "Only one value");
-		return { svg: composeTile({ glyph: def.glyph, accent: NAV_ACCENT, status: "ok" }), title: `${arrow} ${def.label}`, blocked: false };
+		if (preview.blocked || !def) return dimmed(def?.glyph ?? glyph, "Only one\nvalue");
+		return { svg: composeTile({ glyph: def.glyph, accent: NAV_ACCENT, status: okStatus }), title: `${arrow} ${def.label}`, blocked: false };
 	}
 	if (input.kind === "next-sensor" || input.kind === "prev-sensor") {
-		if (preview.blocked || !target) return dimmed(glyph, "No other sensor");
+		if (preview.blocked || !target) return dimmed(glyph, "No other\nsensor");
 		return {
-			svg: composeTile({ glyph: ROLE_GLYPH[target.module.role], accent: NAV_ACCENT, status: "ok" }),
+			svg: composeTile({ glyph: ROLE_GLYPH[target.module.role], accent: NAV_ACCENT, status: okStatus }),
 			title: `${arrow} ${cleanLabel(target.module.name) || "(unnamed)"}`,
 			blocked: false,
 		};
 	}
-	if (preview.blocked || !target) return dimmed(glyph, "One station");
+	if (preview.blocked || !target) return dimmed(glyph, "One\nstation");
 	return {
-		svg: composeTile({ glyph, accent: NAV_ACCENT, status: "ok" }),
+		svg: composeTile({ glyph, accent: NAV_ACCENT, status: okStatus }),
 		title: `${arrow} ${cleanLabel(target.station.name) || "(unnamed)"}`,
 		blocked: false,
 	};

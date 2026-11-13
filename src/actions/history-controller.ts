@@ -31,37 +31,42 @@ interface HistoryEntry extends BaseEntry<KeySurface>, FaceEntry {
 
 const LOADING: ConnectionState = { kind: "loading" };
 
-export class HistoryController extends ControllerBase<KeySurface, HistoryEntry> {
-	protected createEntry(surface: KeySurface, settings: ActionSettings, extra: unknown): HistoryEntry {
+export class HistoryController extends ControllerBase<KeySurface, HistoryEntry, DisplayMetricId> {
+	protected createEntry(surface: KeySurface, settings: ActionSettings, extra: DisplayMetricId | undefined): HistoryEntry {
 		const entry: HistoryEntry = {
 			surface,
 			settings,
 			unsubscribe: undefined,
-			defaultMetric: isDisplayMetricId(extra) ? extra : "temperature",
+			defaultMetric: extra !== undefined && isDisplayMetricId(extra) ? extra : "temperature",
 			paintedImage: undefined,
 			paintedTitle: undefined,
 			titlePainted: false,
 			window: historyWindowOf(settings),
 			pendingWrites: [],
-			slot: undefined as never,
+			slot: this.newSlot(() => entry),
 		};
-		entry.slot = this.newSlot(entry);
 		return entry;
 	}
 
-	private newSlot(entry: HistoryEntry): HistorySlot {
+	/** `entry` is a thunk: the slot is part of the entry it reports to, and only calls back after both exist. */
+	private newSlot(entry: () => HistoryEntry): HistorySlot {
 		return new HistorySlot({
 			fetch: (request) => this.env.getHistory?.(request),
 			now: () => this.env.now(),
 			logger: this.env.logger,
 			onResult: () => {
-				if (this.entries.get(entry.surface.id) === entry) this.repaint(entry);
+				const current = entry();
+				if (this.entries.get(current.surface.id) === current) this.repaint(current);
 			},
 		});
 	}
 
 	protected override followsFocus(entry: HistoryEntry): boolean {
 		return followFocusOf(entry.settings, true) && this.env.focus !== undefined;
+	}
+
+	protected override offersHistoryMetricsOnly(): boolean {
+		return true;
 	}
 
 	protected override presetMetric(entry: HistoryEntry): DisplayMetricId {

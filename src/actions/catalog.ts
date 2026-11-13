@@ -42,7 +42,6 @@ const PI_KEY = "ui/measurement.html" as const;
  * request at most once a minute (none while it backs off or is signed out). So a press CAN
  * cause one request, but never more than one per minute, however often it is pressed.
  */
-
 export const KEYPAD_SPECS = [
 	{ id: "temperature", name: "Temperature", tooltip: "Shows a temperature. Press to request fresh data (at most once a minute) and to see today's minimum and maximum.", glyph: "thermometer", metric: "temperature", propertyInspector: PI_KEY },
 	{ id: "humidity", name: "Humidity", tooltip: "Shows the relative humidity. Press to request fresh data (at most once a minute).", glyph: "droplets", metric: "humidity", propertyInspector: PI_KEY },
@@ -65,7 +64,8 @@ export const DIAL_SPEC = {
 
 /**
  * What a focus-family key does. `display` and `history` are measurement-like (they have
- * settings); the rest are navigation or utility keys without a Property Inspector.
+ * settings); the rest are navigation or utility keys. They have a page too, so the account
+ * section is reachable from any key; the navigation keys' page has no settings of its own.
  */
 export type FocusKind =
 	| "display"
@@ -86,25 +86,28 @@ export interface FocusSpec {
 	readonly name: string;
 	readonly tooltip: string;
 	readonly glyph: GlyphName;
-	/** Property Inspector page; absent = the action has no settings page. */
-	readonly propertyInspector?: "ui/focus.html" | "ui/auto-rotate.html" | "ui/info.html" | "ui/history.html";
+	/** Property Inspector page. Every action has one, so a first-time user who drops ANY key finds the account section. */
+	readonly propertyInspector?: "ui/focus.html" | "ui/auto-rotate.html" | "ui/info.html" | "ui/history.html" | "ui/navigation.html";
 }
 
+/** The page of the seven navigation keys: what the key does, plus the shared account section (no settings of their own). */
+const NAV_PI = "ui/navigation.html" as const;
+
 /**
- * The focus family (docs/FOCUS-AND-HISTORY.md, section 2). Tooltips say exactly what
+ * The focus family. Tooltips say exactly what
  * happens: a reload can only fetch the newest data the cloud has (stations upload about
  * every 10 minutes), never make the station measure, and makes at most one real request
  * per minute.
  */
 export const FOCUS_SPECS = [
 	{ id: "focus", kind: "display", name: "Focus Display", tooltip: "Shows the value of the focused sensor. Follows the focus set by the navigation keys and the dial. Press to request fresh data (at most once a minute). No alerts: a threshold fits one value, and this key changes value with the focus.", glyph: "crosshair", propertyInspector: "ui/focus.html" },
-	{ id: "focus-refresh", kind: "refresh", name: "Reload", tooltip: "Fetches the newest data the cloud has (at most one real request per minute). It cannot make the station measure: stations upload about every 10 minutes. Shows how old the data is.", glyph: "refresh-cw" },
-	{ id: "focus-next-metric", kind: "next-metric", name: "Next Value", tooltip: "Moves the focus to the next value of the same sensor (for example temperature, then humidity). Shows which value comes next.", glyph: "step-forward" },
-	{ id: "focus-prev-metric", kind: "prev-metric", name: "Previous Value", tooltip: "Moves the focus to the previous value of the same sensor. Shows which value comes before.", glyph: "step-back" },
-	{ id: "focus-next-sensor", kind: "next-sensor", name: "Next Sensor", tooltip: "Keeps the value and moves the focus to the next sensor of the station that reports it (for example indoor, then outdoor temperature). Dimmed when there is no other sensor.", glyph: "circle-arrow-right" },
-	{ id: "focus-prev-sensor", kind: "prev-sensor", name: "Previous Sensor", tooltip: "Keeps the value and moves the focus to the previous sensor of the station that reports it. Dimmed when there is no other sensor.", glyph: "circle-arrow-left" },
-	{ id: "focus-next-station", kind: "next-station", name: "Next Station", tooltip: "Moves the focus to the next weather station of the account. Dimmed when the account has only one station.", glyph: "chevrons-right" },
-	{ id: "focus-prev-station", kind: "prev-station", name: "Previous Station", tooltip: "Moves the focus to the previous weather station of the account. Dimmed when the account has only one station.", glyph: "chevrons-left" },
+	{ id: "focus-refresh", kind: "refresh", name: "Reload", tooltip: "Fetches the newest data the cloud has (at most one real request per minute). It cannot make the station measure: stations upload about every 10 minutes. Shows how old the data is.", glyph: "refresh-cw", propertyInspector: NAV_PI },
+	{ id: "focus-next-metric", kind: "next-metric", name: "Next Value", tooltip: "Moves the focus to the next value of the same sensor (for example temperature, then humidity). Shows which value comes next.", glyph: "step-forward", propertyInspector: NAV_PI },
+	{ id: "focus-prev-metric", kind: "prev-metric", name: "Previous Value", tooltip: "Moves the focus to the previous value of the same sensor. Shows which value comes before.", glyph: "step-back", propertyInspector: NAV_PI },
+	{ id: "focus-next-sensor", kind: "next-sensor", name: "Next Sensor", tooltip: "Keeps the value and moves the focus to the next sensor of the station that reports it (for example indoor, then outdoor temperature). Dimmed when there is no other sensor.", glyph: "circle-arrow-right", propertyInspector: NAV_PI },
+	{ id: "focus-prev-sensor", kind: "prev-sensor", name: "Previous Sensor", tooltip: "Keeps the value and moves the focus to the previous sensor of the station that reports it. Dimmed when there is no other sensor.", glyph: "circle-arrow-left", propertyInspector: NAV_PI },
+	{ id: "focus-next-station", kind: "next-station", name: "Next Station", tooltip: "Moves the focus to the next weather station of the account. Dimmed when the account has only one station.", glyph: "chevrons-right", propertyInspector: NAV_PI },
+	{ id: "focus-prev-station", kind: "prev-station", name: "Previous Station", tooltip: "Moves the focus to the previous weather station of the account. Dimmed when the account has only one station.", glyph: "chevrons-left", propertyInspector: NAV_PI },
 	{ id: "auto-rotate", kind: "auto-rotate", name: "Auto Rotate", tooltip: "Press to switch on or off: the focus then advances through the values of the focused sensor every few seconds. Off after a restart unless set to start on.", glyph: "repeat", propertyInspector: "ui/auto-rotate.html" },
 	{ id: "info", kind: "info", name: "Data Age and Battery", tooltip: "Shows how old the data of the focused sensor is. Press to switch to its battery level (where the sensor reports one).", glyph: "info", propertyInspector: "ui/info.html" },
 	{ id: "history", kind: "history", name: "History", tooltip: "Draws the recent course of the focused value (rain as bars). Press to switch between 6 hours, 24 hours and 3 days. Fetches history from the cloud only while visible.", glyph: "chart-line", propertyInspector: "ui/history.html" },

@@ -63,7 +63,7 @@ interface DialEntry extends BaseEntry<DialSurface> {
 	layout: string | undefined;
 	persistTimer: ReturnType<typeof setTimeout> | undefined;
 	/** The face we last wrote ourselves; lets us recognise our own settings echo. */
-	lastWrittenMetric: string | undefined;
+	lastWrittenMetric: DisplayMetricId | undefined;
 	slot: HistorySlot;
 	pressed: boolean;
 	rotatedWhilePressed: boolean;
@@ -85,6 +85,15 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 	}
 
 	protected createEntry(surface: DialSurface, settings: ActionSettings): DialEntry {
+		// The slot's callback names the entry it belongs to; it only runs later, after `entry` exists.
+		const slot = new HistorySlot({
+			fetch: (request) => this.env.getHistory?.(request),
+			now: () => this.env.now(),
+			logger: this.env.logger,
+			onResult: () => {
+				if (this.entries.get(surface.id) === entry) this.repaint(entry);
+			},
+		});
 		const entry: DialEntry = {
 			surface,
 			settings,
@@ -95,18 +104,10 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 			layout: undefined,
 			persistTimer: undefined,
 			lastWrittenMetric: undefined,
-			slot: undefined as never,
+			slot,
 			pressed: false,
 			rotatedWhilePressed: false,
 		};
-		entry.slot = new HistorySlot({
-			fetch: (request) => this.env.getHistory?.(request),
-			now: () => this.env.now(),
-			logger: this.env.logger,
-			onResult: () => {
-				if (this.entries.get(surface.id) === entry) this.repaint(entry);
-			},
-		});
 		return entry;
 	}
 
@@ -118,7 +119,7 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 		return this.follows(entry);
 	}
 
-	/** Module the pinned dial reads: its own choice, else what adoption would pick. */
+	/** What the module the pinned dial reads reports: its own choice, else the one adoption would pick. */
 	private reportedMetrics(entry: DialEntry): DisplayMetricId[] {
 		return this.reportedMetricsFor(entry.settings.moduleKey);
 	}

@@ -23,7 +23,7 @@ self-built pack (double-click in the Stream Deck app) was not tried, neither on 
 2. Elgato's current plugin and product guidelines (naming, "Stream Deck" and "plugin" in names,
    icon sizes, description rules) and the Maker Console submission requirements. Nothing about
    the Marketplace flow was verified for this project.
-3. The manifest `URL` must resolve (the validator warns while the repository is private).
+3. The manifest `URL` must resolve (it does while the repository is public).
 4. Whether the unofficial/non-affiliation wording still fits next to the store listing.
 5. The non-commercial limit: still no ads, paid tier or sponsor links.
 
@@ -40,8 +40,16 @@ hand.
    time by `scripts/sync-manifest-version.ts` (the Stream Deck CLI rejects 3-part versions),
    so the committed manifest may lag one release; the packed file is always correct.
 3. Review and merge that PR when you want to ship.
-4. On merge release-please creates the `vX.Y.Z` tag and the GitHub Release; the `publish` job
-   builds, validates, packs and attaches `*.streamDeckPlugin` to it.
+4. On merge release-please creates the `vX.Y.Z` tag and the GitHub Release. Then two jobs
+   run. `build` checks out the tag with a read-only token (no write permission at all), runs
+   `npm ci --ignore-scripts`, typecheck, build, tests, validate and pack, and hands the
+   `.streamDeckPlugin` over as a workflow artifact. `upload` has the write token, but no
+   checkout and no npm: it downloads that artifact, attests its build provenance with
+   `actions/attest-build-provenance` (permissions `id-token` and `attestations` write only in
+   this job) and attaches the file with `gh release upload`. A compromised install script can
+   therefore not reach the token that writes to the release. The new actions
+   (`actions/download-artifact`, `actions/attest-build-provenance`) must be on the allow-list:
+   run `npm run github:settings -- --check`, and `--apply` after review.
 
 Pre-1.0 (`0.y.z`): `fix:`/`perf:` bump patch, `feat:` bumps minor, `feat!:` also minor.
 
@@ -98,7 +106,7 @@ osv-scanner and zizmor checks every Monday because advisories appear without com
 
 ```sh
 npx release-please release-pr --dry-run \
-  --repo-url=geggo98/stream-deck-home-weather-station \
+  --repo-url=<owner>/<repo> \
   --config-file=release-please-config.json \
   --manifest-file=.release-please-manifest.json \
   --token="$(gh auth token)"
@@ -110,13 +118,13 @@ files are on `main`.
 ## Installing from a release (sideload)
 
 1. Download the `.streamDeckPlugin` file from the release page.
-2. Double-click it; the Stream Deck app installs it.
+2. Double-click it; the Stream Deck app is expected to install it **[unverified]**: nobody has
+   tried it.
 3. Developers can instead run `npm run build` and link the `.sdPlugin` folder with the Stream
    Deck CLI.
 
-Until the repository is public, `npm run validate` prints one warning, `URL should return
-success (received 404)`, for the manifest `URL`. That is expected and not a failure; it must
-be gone before the first release.
+`npm run validate` is clean now that the repository is public (an earlier warning about the
+manifest `URL` returning 404 is gone).
 
 The packed bundle also carries the licence texts: the build writes `LICENSE`, `NOTICE` and
 `THIRD-PARTY-NOTICES.txt` into the `.sdPlugin` folder (so that the minified `bin/plugin.js`

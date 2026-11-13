@@ -6,8 +6,9 @@
  *    say it "must exactly match" the registered one; the user has to register it in the app);
  *  - whether PKCE would be accepted: the docs do not mention it, so it is NOT used;
  *  - what `scope` the token response echoes.
- * The verified bootstrap path is pasting the token pair from the developer portal
- * (`WeatherService.setCredentials`). This flow exists so the loopback variant can be tried.
+ * The recommended first try is this flow; pasting a token pair from the developer portal
+ * (`WeatherService.setCredentials`) is the alternative, and it is UNVERIFIED too (whether the
+ * portal offers a token generator was not inspected). Neither has run against the live service.
  *
  * Security properties (each has a test):
  *  - the listener binds to 127.0.0.1 only, on one configured port;
@@ -30,10 +31,10 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import { type AddressInfo } from "node:net";
 import { type AdapterLogger, scopedLogger } from "../logging.ts";
-import type { CredentialStore } from "./credentials.ts";
-import { NetatmoError } from "./errors.ts";
+import type { CredentialStore, StoredCredentials } from "./credentials.ts";
+import { NetatmoError, describeUnexpected } from "./errors.ts";
 import { DEFAULT_MAX_RESPONSE_BYTES, DEFAULT_TIMEOUT_MS, assertSafeBaseUrl, joinUrl } from "./http.ts";
-import { SCOPE, requestToken } from "./oauth.ts";
+import { SCOPE, type TokenGrant, requestToken } from "./oauth.ts";
 import type { BrowserLoginPhase } from "./service.ts";
 import { DEFAULT_BASE_URL } from "./token-manager.ts";
 
@@ -60,6 +61,12 @@ export interface BrowserLoginOptions {
 	readonly randomState?: () => string;
 	/** Called after the credentials were persisted and before the "done" phase. */
 	readonly onSuccess?: () => Promise<void> | void;
+	/**
+	 * Called when the exchange worked but writing the credentials failed: the grant is valid at
+	 * Netatmo and its refresh token is the only valid one, so the caller can keep it in memory.
+	 * The flow still ends as an error phase that says the credentials were not saved.
+	 */
+	readonly onSaveFailed?: (credentials: StoredCredentials) => Promise<void> | void;
 }
 
 /** Handle for cancelling a running flow (dispose, or a second flow replacing the first). */
@@ -83,6 +90,12 @@ function reply(res: http.ServerResponse, status: number, html: string): void {
 		Connection: "close",
 	});
 	res.end(html);
+}
+
+/** Errno class of a failed file operation, or "error" (never the message: it holds paths). */
+function errnoOf(error: unknown): string {
+	const code = (error as NodeJS.ErrnoException | undefined)?.code;
+	return typeof code === "string" && /^[A-Z0-9_]{2,20}$/.test(code) ? code : "error";
 }
 
 function sameSecret(a: string, b: string): boolean {
@@ -133,8 +146,9 @@ export function startBrowserLogin(options: BrowserLoginOptions): BrowserLoginHan
 	const fail = (message: string): void => end({ phase: "error", message });
 
 	async function finish(code: string): Promise<void> {
+		let grant: TokenGrant;
 		try {
-			const grant = await requestToken(
+			grant = await requestToken(
 				fetchImpl,
 				baseUrl,
 				{
@@ -156,21 +170,45 @@ export function startBrowserLogin(options: BrowserLoginOptions): BrowserLoginHan
 				return;
 			}
 			committing = true;
-			// persist before anything else: this refresh token is the only valid one
-			await options.store.save({
-				clientId: options.clientId,
-				clientSecret: options.clientSecret,
-				refreshToken: grant.refreshToken,
-				accessToken: grant.accessToken,
-				accessTokenExpiresAt: now() + grant.expiresInSeconds * 1000,
-			});
-			await options.onSuccess?.();
-			end({ phase: "done" });
 		} catch (error) {
 			const message = error instanceof NetatmoError ? error.message : "Sign-in failed";
 			log.warn(`code exchange failed: ${message}`);
+			if (!(error instanceof NetatmoError)) log.error(`unexpected error during the code exchange: ${describeUnexpected(error)}`);
 			fail(message);
+			return;
 		}
+		// From here on the grant is valid at Netatmo and its refresh token is the only valid one:
+		// a write failure is a disk problem, not a sign-in problem, and must not be reported as one.
+		const credentials: StoredCredentials = {
+			clientId: options.clientId,
+			clientSecret: options.clientSecret,
+			refreshToken: grant.refreshToken,
+			accessToken: grant.accessToken,
+			accessTokenExpiresAt: now() + grant.expiresInSeconds * 1000,
+		};
+		try {
+			// persist before anything else
+			await options.store.save(credentials);
+		} catch (error) {
+			const code = errnoOf(error);
+			log.error(`could not save the credentials after sign-in (${code})`);
+			try {
+				await options.onSaveFailed?.(credentials);
+			} catch (inner) {
+				log.error(`keeping the unsaved credentials in memory failed: ${describeUnexpected(inner)}`);
+			}
+			end({
+				phase: "error",
+				message: `Signed in at Netatmo, but the credentials could not be saved to disk (${code}). Free disk space or check permissions, then try again.`,
+			});
+			return;
+		}
+		try {
+			await options.onSuccess?.();
+		} catch (error) {
+			log.error(`after-sign-in step failed: ${describeUnexpected(error)}`);
+		}
+		end({ phase: "done" });
 	}
 
 	server.on("request", (req, res) => {

@@ -184,9 +184,10 @@ test("sent messages have exactly the fields the protocol declares", () => {
 
 test("the global-settings events and message fields match the protocol", () => {
 	const ev = protocolEvents();
-	for (const name of ["getGlobalSettings", "setGlobalSettings", "globalSettings"]) assert.equal(ev[name], name);
+	for (const name of ["getGlobalSettings", "setGlobalSettings", "globalSettings", "clearResult"]) assert.equal(ev[name], name);
 	assert.deepEqual(interfaceKeys("SetGlobalSettingsMessage").sort(), ["event", "pollIntervalSeconds", "unitSystem"]);
-	assert.deepEqual(interfaceKeys("GlobalSettingsMessage").sort(), ["event", "pollIntervalSeconds", "unitSystem"]);
+	assert.deepEqual(interfaceKeys("GlobalSettingsMessage").sort(), ["error", "event", "pollIntervalSeconds", "unitSystem"]);
+	assert.deepEqual(interfaceKeys("ClearResultMessage").sort(), ["error", "event", "ok", "status"]);
 });
 
 test("label maxlength in both pages equals MAX_LABEL_CHARS in src/render/title.ts (cannot drift)", () => {
@@ -218,6 +219,26 @@ test("every PI_EVENTS name appears as a string literal in the PI scripts, none i
 	}
 });
 
+/** Anything that would write settings from the PI instead of sending a message to the plugin. */
+const PERSISTS = /localStorage|sessionStorage|indexedDB|setSettings|\.setGlobalSettings\s*\(|\bglobal=/;
+
+test("the persistence guard regex matches what it must catch (negative control)", () => {
+	for (const bad of [
+		"streamDeck.setGlobalSettings({ a: 1 })",
+		"client.setGlobalSettings (x)",
+		"SDPIComponents.streamDeckClient.setGlobalSettings(x)",
+		'<sdpi-textfield global="true">',
+		"x = globalThis; y = global=1",
+		"localStorage.setItem(k, v)",
+		"client.setSettings(s)",
+	]) {
+		assert.ok(PERSISTS.test(bad), `guard does not see: ${bad}`);
+	}
+	// The message name the PI really sends is allowed: it is not a call named setGlobalSettings.
+	assert.ok(!PERSISTS.test('client.send({ event: "setGlobalSettings" })'));
+	assert.ok(!PERSISTS.test("client.send({ event: EVENTS.setGlobalSettings, unitSystem: v })"), "the message-name constant is not a call");
+});
+
 test("PI scripts: no logging, no dynamic markup, no network, no storage of secrets", () => {
 	const scripts = piScripts();
 	assert.ok(scripts.length >= 3);
@@ -225,7 +246,7 @@ test("PI scripts: no logging, no dynamic markup, no network, no storage of secre
 		assert.ok(!/\bconsole\s*\./.test(text), `${file}: console call (settings and messages may carry secrets)`);
 		assert.ok(!/\binnerHTML\b|\binsertAdjacentHTML\b|\bdocument\.write\b/.test(text), `${file}: builds markup from strings`);
 		assert.ok(!/\beval\s*\(|new Function|\bfetch\s*\(|XMLHttpRequest|WebSocket|importScripts/.test(text), `${file}: network or dynamic code`);
-		assert.ok(!/localStorage|sessionStorage|indexedDB|setSettings|\\.setGlobalSettings\\b|\\bglobal=/.test(text), `${file}: persists something`);
+		assert.ok(!PERSISTS.test(text), `${file}: persists something`);
 		for (const line of text.split("\n")) {
 			if (/clientSecret|refreshToken/.test(line)) {
 				assert.ok(!/\b(?:log|print|alert|debug|warn|error|info|trace)\s*\(/i.test(line.replace(/\/\/.*$/, "")), `${file}: secret name near a log-like call: ${line.trim()}`);
@@ -252,6 +273,65 @@ test("describeStatus maps every state to text and class", () => {
 	assert.equal(d({ state: "error", message: "timeout" }).cls, "pi-status-warn");
 	assert.equal(d({ state: "auth-error", message: "token rejected" }).cls, "pi-status-error");
 	assert.match(d({ state: "auth-error" }).text, /^Sign-in needed/);
+});
+
+test("describeStatus: ok with a warning shows the warning in words and in the warning class", () => {
+	const pi = load();
+	const d = plain(
+		pi.describeStatus({ state: "ok", stationCount: 1, moduleCount: 2, warning: "The renewed sign-in could not be saved." }, () => "12:34"),
+	);
+	assert.equal(d.cls, "pi-status-warn");
+	assert.equal(d.text, "Connected: 1 station, 2 modules. Warning: The renewed sign-in could not be saved.");
+	// A plain message on an ok status is NOT a warning (the old encoding is gone).
+	assert.equal(plain(pi.describeStatus({ state: "ok", message: "something" })).cls, "pi-status-ok");
+	assert.ok(plain(pi.describeStatus({ state: "ok", warning: "x".repeat(5000) })).text.length < 300);
+});
+
+test("describeStatus: not-configured with a message (e.g. unreadable credentials file) shows that message", () => {
+	const pi = load();
+	const d = plain(pi.describeStatus({ state: "not-configured", message: "The credentials file cannot be read." }));
+	assert.equal(d.cls, "pi-status-warn");
+	assert.match(d.text, /cannot be read/);
+	assert.match(plain(pi.describeStatus({ state: "not-configured" })).text, /^Not set up yet/);
+});
+
+function routerSource(): string {
+	return readFileSync(join(root, "src", "actions", "pi-router.ts"), "utf8");
+}
+
+test("the PI credential length limit equals MAX_CREDENTIAL_CHARS in the plugin's router", () => {
+	const limit = Number(/export const MAX_CREDENTIAL_CHARS = (\d+);/.exec(routerSource())?.[1]);
+	assert.ok(Number.isInteger(limit) && limit > 0, "constant not found; the regex no longer sees it");
+	const pi = load();
+	const at = "x".repeat(limit);
+	assert.equal(plain(pi.buildCredentialsMessage({ clientId: CLIENT_ID, clientSecret: at, refreshToken: TOKEN })).ok, true);
+	assert.equal(plain(pi.buildCredentialsMessage({ clientId: CLIENT_ID, clientSecret: at + "x", refreshToken: TOKEN })).ok, false);
+	assert.equal(plain(pi.buildBrowserLoginMessage({ clientId: CLIENT_ID, clientSecret: at })).ok, true);
+	assert.equal(plain(pi.buildBrowserLoginMessage({ clientId: CLIENT_ID, clientSecret: at + "x" })).ok, false);
+});
+
+test("a too-long paste says 'too long' (not 'required' or 'looks wrong') on both routes", () => {
+	const pi = load();
+	const long = "x".repeat(600);
+	const a = plain(pi.buildCredentialsMessage({ clientId: CLIENT_ID, clientSecret: SECRET, refreshToken: long }));
+	assert.match(a.error, /^Refresh token is too long/);
+	const b = plain(pi.buildBrowserLoginMessage({ clientId: CLIENT_ID, clientSecret: long }));
+	assert.match(b.error, /^Client secret is too long/);
+	assert.ok(!a.error.includes(long) && !b.error.includes(long));
+	assert.match(plain(pi.buildBrowserLoginMessage({ clientId: "two words", clientSecret: SECRET })).error, /^Client ID contains spaces/);
+	assert.match(plain(pi.buildBrowserLoginMessage({ clientId: "", clientSecret: "" })).error, /Client ID, Client secret/);
+});
+
+test("the static redirect URI in every page is the plugin's loopback port", () => {
+	const port = Number(/export const DEFAULT_LOOPBACK_PORT = (\d+);/.exec(readFileSync(join(root, "src", "adapter", "station", "browser-login.ts"), "utf8"))?.[1]);
+	assert.ok(Number.isInteger(port) && port > 0, "constant not found; the regex no longer sees it");
+	const pages = readdirSync(ui).filter((f) => f.endsWith(".html"));
+	assert.ok(pages.length >= 7);
+	for (const page of pages) {
+		const html = readFileSync(join(ui, page), "utf8");
+		assert.ok(html.includes(`<div id="redirectUri" class="pi-code">http://localhost:${port}/callback</div>`), `${page}: redirect URI not pinned to port ${port}`);
+		assert.ok(!/Shown after the first press/.test(html), page);
+	}
 });
 
 test("describeStatus clips long plugin text", () => {
@@ -406,15 +486,19 @@ test("account: credentialsResult updates status and re-enables Save; the error n
 	for (const e of els.values()) assert.ok(!e.textContent.includes(SECRET), `#${e.id} shows a secret`);
 });
 
-test("account: saved:true with ok:false says saved, keeps polling, and does not ask for re-entry (fails with the old 'Not saved' text)", () => {
+test("account: saved:true with ok:false shows the plugin's complete text as given and does not ask for re-entry", () => {
 	const { client, el } = accountFixture();
 	fill(el);
 	el("saveCredentials").dispatch("click");
-	client.deliver({ event: "credentialsResult", ok: false, saved: true, error: "Signed in, but loading station data failed.", status: { state: "error" } });
+	const given = "Saved, but Netatmo does not allow reading station data with this token (missing read_station scope?). Create the token again with only read_station.";
+	client.deliver({ event: "credentialsResult", ok: false, saved: true, error: given, status: { state: "auth-error" } });
 	const text = el("accountResult").textContent;
-	assert.match(text, /^Saved, but station data could not be loaded yet: Signed in/);
-	assert.match(text, /Polling retries by itself\.$/);
-	assert.ok(!/enter the values again|Not saved/i.test(text));
+	assert.equal(text, given);
+	assert.ok(!/Polling retries|enter the values again|Not saved/i.test(text), "no invented retry promise");
+	assert.equal(el("accountResult").className, "pi-warn");
+	// Without a text there is still a safe fallback that promises nothing.
+	client.deliver({ event: "credentialsResult", ok: false, saved: true, status: { state: "error" } });
+	assert.match(el("accountResult").textContent, /^Saved, but station data could not be loaded yet\.$/);
 	assert.equal(el("clientSecret").value, "");
 	assert.equal(el("refreshToken").value, "");
 	assert.equal(el("saveCredentials").disabled, false);
@@ -447,6 +531,76 @@ test("account: a save that is never answered re-enables the button after a timeo
 	assert.equal(el("saveCredentials").disabled, true);
 	timers.advance(60_000);
 	assert.equal(el("saveCredentials").disabled, false);
+	assert.match(el("accountResult").textContent, /^No answer from the plugin\. Check the account status before entering the token again; it may already be used up\.$/);
+	assert.equal(el("accountResult").className, "pi-warn");
+});
+
+test("account: a save answered in time shows no timeout text later", () => {
+	const { client, el, timers } = accountFixture();
+	fill(el);
+	el("saveCredentials").dispatch("click");
+	client.deliver({ event: "credentialsResult", ok: true, status: { state: "ok" } });
+	timers.advance(60_000);
+	assert.match(el("accountResult").textContent, /^Saved\./);
+});
+
+test("account: a global setting that could not be saved shows the plugin's error and the values still in effect", () => {
+	const { client, el } = accountFixture();
+	client.deliver({
+		event: "globalSettings",
+		pollIntervalSeconds: 300,
+		unitSystem: "account",
+		error: "Settings could not be loaded; changes cannot be saved this session. Restart Stream Deck.",
+	});
+	assert.match(el("accountResult").textContent, /^Settings could not be loaded/);
+	assert.equal(el("accountResult").className, "pi-warn");
+	// The values still in effect are shown (the select snaps back).
+	assert.equal(el("pollInterval").value, "300");
+});
+
+test("account: a globalSettings message without error does not touch the result line", () => {
+	const { client, el } = accountFixture();
+	el("accountResult").textContent = "kept";
+	client.deliver({ event: "globalSettings", pollIntervalSeconds: 600, unitSystem: "metric" });
+	assert.equal(el("accountResult").textContent, "kept");
+});
+
+test("account: Clear says 'Removing' until clearResult, then the real outcome", () => {
+	const { client, el } = accountFixture();
+	el("clearCredentials").dispatch("click");
+	el("clearCredentials").dispatch("click");
+	assert.equal(el("accountResult").textContent, "Removing…");
+	assert.ok(!/removed/i.test(el("accountResult").textContent), "must not claim success before the plugin answered");
+	assert.equal(el("clearCredentials").disabled, true);
+	client.deliver({ event: "clearResult", ok: true, status: { state: "not-configured" } });
+	assert.equal(el("accountResult").textContent, "Stored credentials removed.");
+	assert.equal(el("accountResult").className, "pi-hint");
+	assert.equal(el("clearCredentials").disabled, false);
+	assert.match(el("accountStatus").textContent, /^Not set up yet/);
+});
+
+test("account: a failed clear shows the plugin's error with the file location and keeps the status", () => {
+	const { client, el } = accountFixture();
+	el("clearCredentials").dispatch("click");
+	el("clearCredentials").dispatch("click");
+	const error = "The credentials could not be removed (EACCES). Delete the file credentials.json in the plugin data folder by hand.";
+	client.deliver({ event: "clearResult", ok: false, error, status: { state: "ok", stationCount: 1 } });
+	assert.equal(el("accountResult").textContent, error);
+	assert.equal(el("accountResult").className, "pi-warn");
+	assert.equal(el("clearCredentials").disabled, false);
+	assert.equal(el("accountStatus").className, "pi-status pi-status-ok", "still connected: nothing was removed");
+	client.deliver({ event: "clearResult", ok: false, status: { state: "ok" } });
+	assert.match(el("accountResult").textContent, /could not be removed/);
+});
+
+test("account: a clear that is never answered stops being busy and says so", () => {
+	const { el, timers } = accountFixture();
+	el("clearCredentials").dispatch("click");
+	el("clearCredentials").dispatch("click");
+	timers.advance(60_000);
+	assert.equal(el("clearCredentials").disabled, false);
+	assert.match(el("accountResult").textContent, /^No answer from the plugin\./);
+	assert.ok(!/removed\./.test(el("accountResult").textContent));
 });
 
 test("account: Clear needs a second click and then sends clearCredentials once", () => {
@@ -492,6 +646,11 @@ test("account: browser sign-in sends id and secret, wipes the secret, keeps the 
 
 	client.deliver({ event: "browserLogin", phase: "done", status: { state: "ok" } });
 	assert.equal(el("accountStatus").className, "pi-status pi-status-ok");
+	// A done phase without a status (the plugin could not read it): the PI asks again.
+	const before = client.sent.filter((m) => m.event === "getAccountStatus").length;
+	client.deliver({ event: "browserLogin", phase: "done" });
+	assert.equal(client.sent.filter((m) => m.event === "getAccountStatus").length, before + 1);
+	assert.equal(el("browserLoginResult").textContent, "Signed in.");
 	client.deliver({ event: "browserLogin", phase: "error", message: "denied" });
 	assert.equal(el("browserLoginResult").className, "pi-warn");
 	assert.equal(el("browserLoginResult").textContent, "denied");

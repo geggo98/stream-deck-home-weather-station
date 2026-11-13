@@ -28,7 +28,11 @@ const BACKGROUND = "#16191D";
 const BACKGROUND_TINT = 0.14;
 const IDLE_DOT = "#8A929B";
 
-export type TileStatus = "ok" | "stale" | "warn" | "idle";
+/**
+ * "notice" = the data is current and fully readable, but something needs attention (the renewed
+ * sign-in could not be saved): a warning-coloured dot WITHOUT dimming, unlike "stale".
+ */
+export type TileStatus = "ok" | "stale" | "notice" | "warn" | "idle";
 export type Trend = "up" | "down" | "stable";
 
 export interface TileSpec {
@@ -80,7 +84,7 @@ function trendGlyph(trend: Trend): GlyphName {
 }
 
 function statusDotColour(status: TileStatus, dim: boolean): string {
-	const base = status === "warn" ? ERROR_COLOUR : status === "stale" ? WARNING_COLOUR : IDLE_DOT;
+	const base = status === "warn" ? ERROR_COLOUR : status === "stale" || status === "notice" ? WARNING_COLOUR : IDLE_DOT;
 	// The dot is the one thing that must stay readable on a dimmed tile.
 	return dim ? scaleColour(base, 0.85) : base;
 }

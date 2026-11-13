@@ -59,8 +59,10 @@ every call. Therefore every job runs with
 * an empty throwaway working directory (no repository files, no `.env`, no manifest),
 
 both deleted afterwards (the symlink is removed, never followed). Probe with the isolated
-home: no instruction files visible; input tokens per call dropped (about 46k against
-55-58k in the research run, about 31k for the SVG jobs here). The script never reads the
+home: no instruction files visible. Input tokens per call in this run: about 31k for the
+SVG jobs and 83k to 95k for the three icon jobs (table below); the research run before the
+isolation had measured 55k to 58k per call for its jobs, which is not comparable with the
+icon jobs here, so no saving is claimed. The script never reads the
 login file. One caveat: if Codex refreshes its login it may replace the symlink with a
 regular file inside the throwaway home; the script then copies that file back to the
 original (mode 0600) so a rotated refresh token is not lost. This path is covered by a

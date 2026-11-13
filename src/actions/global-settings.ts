@@ -17,7 +17,9 @@
  * adapter).
  */
 
-import type { GlobalSettings, MeasurementSettings } from "../pi-protocol.ts";
+import type { ActionSettings } from "../focus/settings.ts";
+import type { GlobalSettings } from "../pi-protocol.ts";
+import type { DisplayMetricId } from "../render/metrics.ts";
 
 let cached: GlobalSettings = {};
 const listeners = new Set<() => void>();
@@ -66,6 +68,68 @@ export function areGlobalSettingsLoaded(): boolean {
 	return loaded;
 }
 
+/** What the PI shows when the settings could not be loaded (and so can never be written this session). */
+export const SETTINGS_UNAVAILABLE_MESSAGE = "Settings could not be loaded; changes cannot be saved this session. Restart Stream Deck.";
+
+let loadFailed = false;
+
+/**
+ * plugin.ts calls this after the last load attempt failed. The gate stays closed (see above);
+ * the flag only lets the Property Inspector say why its changes snap back.
+ */
+export function markGlobalSettingsLoadFailed(): void {
+	loadFailed = true;
+}
+
+/** undefined while the settings are usable. */
+export function globalSettingsError(): string | undefined {
+	return loadFailed && !loaded ? SETTINGS_UNAVAILABLE_MESSAGE : undefined;
+}
+
+export interface LoadRetryOptions {
+	readonly attempts?: number;
+	readonly delayMs?: number;
+	readonly logger: { warn(message: string): void; error(message: string): void };
+	/** Test seam; the default waits with setTimeout. */
+	readonly sleep?: (ms: number) => Promise<void>;
+}
+
+/**
+ * The initial load, with retries: a load that fails once (the SDK connection was not ready,
+ * a transient error) must not leave the gate closed for the whole session. After the last
+ * failure the gate stays closed (writing over settings we could not read is worse) and the
+ * failure is recorded for the Property Inspector. Returns whether the settings were loaded.
+ */
+export async function loadGlobalSettingsWithRetry(load: () => Promise<unknown>, options: LoadRetryOptions): Promise<boolean> {
+	const attempts = options.attempts ?? 3;
+	const delayMs = options.delayMs ?? 1000;
+	const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+	for (let attempt = 1; attempt <= attempts; attempt++) {
+		try {
+			setCachedGlobalSettings(asGlobalSettings(await load()));
+			// Only now may anything write the global settings back: until this point the cache
+			// every writer merges over is empty (see updateGlobalSettings).
+			markGlobalSettingsLoaded();
+			return true;
+		} catch (err) {
+			const reason = err instanceof Error ? err.message : String(err);
+			if (attempt < attempts) {
+				options.logger.warn(`Loading the global settings failed (attempt ${attempt} of ${attempts}), retrying: ${reason}`);
+				await sleep(delayMs);
+			} else {
+				options.logger.error(`Loading the global settings failed (attempt ${attempt} of ${attempts}); settings cannot be saved this session: ${reason}`);
+			}
+		}
+	}
+	markGlobalSettingsLoadFailed();
+	return false;
+}
+
+/** What the SDK hands over is JSON of unknown shape: anything but a plain object becomes `{}`. */
+export function asGlobalSettings(value: unknown): GlobalSettings {
+	return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as GlobalSettings) : {};
+}
+
 /** How long a bind may wait for the load before carrying on without it. */
 export const GLOBAL_SETTINGS_WAIT_MS = 2000;
 
@@ -97,9 +161,12 @@ let writeQueue: Promise<void> = Promise.resolve();
  * The only way to write the global settings. Patches are applied to the live cache,
  * serialised against each other, and the cache is updated BEFORE the round trip so a
  * queued patch merges over the new values even while the write is in flight. A patch
- * returning `undefined` skips the write. A failed write leaves the new values in the
- * cache on purpose: the next successful write carries them, so a transient failure
- * self-heals instead of resurrecting old data.
+ * returning `undefined` skips the write.
+ *
+ * A failed write takes the new values back out of the cache (when nothing replaced the
+ * cache meanwhile): listeners, and with them the poll interval and the units on every key,
+ * must not keep a value that was never saved while the Property Inspector reports the
+ * failure. The caller sees the rejection and says so; the change has to be made again.
  */
 export function updateGlobalSettings(
 	patch: (current: GlobalSettings) => GlobalSettings | undefined,
@@ -111,8 +178,14 @@ export function updateGlobalSettings(
 		if (!writer) throw new Error("no global-settings writer injected");
 		const next = patch(cached);
 		if (next === undefined) return;
+		const previous = cached;
 		setCachedGlobalSettings(next);
-		await writer(next);
+		try {
+			await writer(next);
+		} catch (err) {
+			if (cached === next) setCachedGlobalSettings(previous);
+			throw err;
+		}
 	});
 	writeQueue = run.then(
 		() => {},
@@ -147,11 +220,11 @@ export function unitSystemOf(gs: GlobalSettings): "account" | "metric" | "imperi
  * whose reply is also delivered to the action's own handler, so merely opening a PI
  * would re-enter onDidReceiveSettings. Actions record what they already have instead.
  */
-const actionSettings = new Map<string, MeasurementSettings>();
+const actionSettings = new Map<string, ActionSettings>();
 /** Bound on every map keyed by externally supplied ids. */
 export const MAX_TRACKED_ACTION_SETTINGS = 512;
 
-export function rememberActionSettings(actionId: string, settings: MeasurementSettings): void {
+export function rememberActionSettings(actionId: string, settings: ActionSettings): void {
 	if (!actionSettings.has(actionId) && actionSettings.size >= MAX_TRACKED_ACTION_SETTINGS) {
 		const oldest = actionSettings.keys().next().value;
 		if (oldest !== undefined) actionSettings.delete(oldest);
@@ -159,13 +232,33 @@ export function rememberActionSettings(actionId: string, settings: MeasurementSe
 	actionSettings.set(actionId, settings);
 }
 
-export function getRememberedActionSettings(actionId: string): MeasurementSettings | undefined {
+export function getRememberedActionSettings(actionId: string): ActionSettings | undefined {
 	return actionSettings.get(actionId);
 }
 
 export function forgetActionSettings(actionId: string): void {
 	actionSettings.delete(actionId);
 	actionDefaultMetric.delete(actionId);
+	historyActions.delete(actionId);
+}
+
+/**
+ * Actions whose metric dropdown may only offer measurements that have a history (the history
+ * key). The PI's datasource request carries the action id only, so the router asks here.
+ * Bounded like the settings memory.
+ */
+const historyActions = new Set<string>();
+
+export function rememberHistoryAction(actionId: string): void {
+	if (!historyActions.has(actionId) && historyActions.size >= MAX_TRACKED_ACTION_SETTINGS) {
+		const oldest = historyActions.values().next().value;
+		if (oldest !== undefined) historyActions.delete(oldest);
+	}
+	historyActions.add(actionId);
+}
+
+export function isRememberedHistoryAction(actionId: string): boolean {
+	return historyActions.has(actionId);
 }
 
 /**
@@ -173,9 +266,9 @@ export function forgetActionSettings(actionId: string): void {
  * Inspector's metric dropdown can then preselect it while the action's own `metric` setting
  * is still empty. Bounded like the settings memory.
  */
-const actionDefaultMetric = new Map<string, string>();
+const actionDefaultMetric = new Map<string, DisplayMetricId>();
 
-export function rememberActionDefaultMetric(actionId: string, metric: string): void {
+export function rememberActionDefaultMetric(actionId: string, metric: DisplayMetricId): void {
 	if (!actionDefaultMetric.has(actionId) && actionDefaultMetric.size >= MAX_TRACKED_ACTION_SETTINGS) {
 		const oldest = actionDefaultMetric.keys().next().value;
 		if (oldest !== undefined) actionDefaultMetric.delete(oldest);
@@ -183,6 +276,6 @@ export function rememberActionDefaultMetric(actionId: string, metric: string): v
 	actionDefaultMetric.set(actionId, metric);
 }
 
-export function getRememberedDefaultMetric(actionId: string): string | undefined {
+export function getRememberedDefaultMetric(actionId: string): DisplayMetricId | undefined {
 	return actionDefaultMetric.get(actionId);
 }

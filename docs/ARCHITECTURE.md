@@ -18,9 +18,10 @@ Stream Deck app ── WebSocket ── plugin process (Node 24, one bundled fil
    src/actions/*     SDK layer: bind funnel, repaint-from-cache, key & dial actions
    src/focus/*       pure navigation over the focus (station, module, metric); SDK-free
    src/render/*      pure functions: snapshot + settings -> SVG string / title / feedback
-                     (including the history sparkline)
+                     (including the history sparkline); display units (`format.ts`) and
+                     freshness / status (`status.ts`) live here
    src/adapter/station/*   SDK-FREE: credentials, token manager, HTTP client, parser,
-                           units, freshness, poller. Never imports @elgato/streamdeck.
+                           history, poller, browser sign-in. Never imports @elgato/streamdeck.
    src/pi-protocol.ts      message names + shapes shared with the Property Inspector
    ui/*.html, ui/init/*.js Property Inspector (static HTML + vendored sdpi-components)
 ```
@@ -32,7 +33,9 @@ rule holds for test files.
 
 ## Data flow
 
-1. `Poller` (one per process) owns the only network traffic. It starts with the first
+1. `Poller` (one per process) owns the recurring traffic of the station data. Three other
+   things also call the API: history (`getmeasure`, see "History"), the validation request after a
+   save or a sign-in, and the code exchange of the browser sign-in. It starts with the first
    subscriber and stops after the last. Default interval 300 s (Netatmo refreshes
    station data about every 10 minutes); never below 60 s; jitter; exponential backoff on
    errors, capped at 1 h; honours `Retry-After`. A key press may request `refresh()`,
@@ -65,7 +68,8 @@ could outlive the outage. Display table:
 | fixed key without a module | `Pick module` |
 | module (or focus) has no reading for the metric | `No data` |
 | history without data | `No history`; while the first request runs `Loading`; failed request `Offline`; budget used up `Try later` |
-| token rotation not saved | `error` ConnectionState with the message below; data keeps flowing, keys show the last good data and look normal. The message is shown only in the account status of the Property Inspector (`isUnpersistedRotation` in `src/render/status.ts`, `pi-router.ts`); the deck itself gives no signal |
+| token rotation not saved | `ok` ConnectionState with `warning: "unpersisted-rotation"`; data keeps flowing and keys keep their normal face and full opacity. The warning is shown twice: the Property Inspector's account status line (the router sends `AccountStatus.warning`) and a warning marker on the keys: a warning-coloured dot on the tile, on the dial a "!" and a warning-coloured indicator bar; staleness wins when both apply (`src/render/status.ts`, `tile.ts`, `dial-feedback.ts`). The human text is the shared constant `UNPERSISTED_ROTATION_MESSAGE` |
+| one failed poll | every key counts as stale (`freshness !== fresh` or a cached error) and is dimmed at once, however recent the last good data is |
 
 ## Authentication and secrets
 
@@ -79,11 +83,12 @@ could outlive the outage. Display table:
   sign in). If both persist attempts fail, the new pair is kept in memory only (the old one
   is already dead) and:
   * each failed attempt is logged at error level (error code only);
-  * `hasUnpersistedRotation` turns true and the poller publishes an `error`
-    `ConnectionState` carrying `UNPERSISTED_ROTATION_MESSAGE` (exported by
-    `src/adapter/station/token-manager.ts`), which the Property Inspector's account status
-    shows (and only that: keys render it as no error and keep showing the last good data, so
-    the deck itself gives no signal); data keeps flowing;
+  * `hasUnpersistedRotation` turns true and the poller publishes an
+    `ok` `ConnectionState` with `warning: "unpersisted-rotation"` (the text is
+    `UNPERSISTED_ROTATION_MESSAGE`, exported by `src/adapter/station/token-manager.ts`). The
+    router maps it to `AccountStatus` state `ok` plus `warning`, which the Property Inspector
+    prints as "Connected ... Warning: <text>", and the keys show a warning marker without
+    dimming; data keeps flowing;
   * the write is retried at the start of every `getAccessToken()`, i.e. on every poll; when
     it succeeds the flag and the message disappear;
   * a restart before a successful write leaves the DEAD old refresh token on disk: the next
@@ -99,12 +104,31 @@ could outlive the outage. Display table:
   loopback URIs is not documented), or pasting a token pair that the developer portal is
   said to generate (described by community projects, absent from Netatmo's documentation,
   not inspected). See docs/SETUP.md and docs/WEATHER-API.md.
+* The same rule applies when a user saves credentials or finishes the browser sign-in
+  (`create-service.ts`): the rotated pair is written to disk as soon as Netatmo accepted the
+  token request, BEFORE the station data request; `saved: true` therefore also holds when only
+  the data load failed afterwards. When the write itself fails the result is
+  `{ ok: false, saved: false, error }` and the pair is adopted into the live token manager in
+  memory (same policy as above) so it is not lost.
+* `setCredentials` returns `{ ok: false, saved: true | false, error }`, where `error` is the
+  complete, user-facing text; the Property Inspector prints it as given. An auth failure of
+  the first data request ("403, code 13", missing `read_station`) says so and does not promise
+  a retry, because the poller stops on auth errors.
+* Clearing: `service.clearCredentials()` rejects when the file cannot be removed (the errno
+  code is logged); the router answers `clearResult { ok, error, status }` and the Property
+  Inspector shows "Removing..." until then. Polling stops only when the removal worked. Clear
+  does not revoke anything at Netatmo.
+* A credentials file that exists but cannot be read (permissions) or parsed is a distinct
+  summary (`CredentialSummary.unreadable`), shown with the data directory, not as "not
+  configured".
 * Storage: a `0600` JSON file in the per-user application-data directory
   (`~/Library/Application Support/home-weather-station/credentials.json`,
   `%APPDATA%\home-weather-station\`, `$XDG_CONFIG_HOME` or `~/.config/…`), written
   atomically (temp file + rename). NOT in Stream Deck settings: those are plain JSON in
   the user's profile and are dumped into the log at TRACE level.
-* The PI sees only `CredentialSummary`/`AccountStatus`; secrets travel PI -> plugin once.
+* The PI sees only `CredentialSummary`/`AccountStatus`; secrets travel PI -> plugin in the
+  `setCredentials` and `startBrowserLogin` messages and never back. One parser
+  (`parseCredentialInput`) validates both messages (512 characters at most per field).
 * Never log tokens, secrets, Authorization headers, URLs with query strings, module ids
   at INFO, or raw API bodies. A redaction test guards this. Redaction itself is best
   effort: it replaces secrets it knows (raw, URL-encoded, JSON-escaped, base64) and
@@ -132,11 +156,11 @@ against the live service.
   verified on hardware).
 * API strings (module names, station names) never enter SVG as markup: escape them, or
   better, keep them out of the SVG and use the native title.
-* Quantise values to the displayed precision before composing so `writeKeyImage`
+* Quantise values to the displayed precision before composing so `writeKeyFace`
   de-duplication works and polls with jittering decimals do not rewrite the image.
 * Every SDK promise is caught (`fireAndLog`): Node 24 treats unhandled rejections as fatal.
-* Dial/touch strip: built-in layout `$B1` (value + indicator bar), content via
-  `setFeedback`; every item gets an explicit opacity. Gestures: see "Dial mapping".
+* Dial/touch strip: built-in layout `$B1` (value + indicator bar) and the custom layout
+  `layouts/history-strip.json` for the mini history, content via `setFeedback`; every item gets an explicit opacity. Gestures: see "Dial mapping".
 
 ## Focus and navigation
 
@@ -204,11 +228,14 @@ Stream Deck hardware was available.
   with window `"6h" | "24h" | "3d"`; result `{ kind: "ok", request, points: {t, v}[], stepMs, fetchedAt }` (t in epoch ms;
   there is no `unit` field) or an error result (`src/adapter/station/history.ts`). It calls `GET /api/getmeasure` with `device_id`
   (base station id), `module_id` (omitted for the base module), `scale` (30min for 6h/24h,
-  1hour for 3d), `type`, `date_begin`/`date_end` and `optimize=true`. Response shapes and
+  1hour for 3d, so at most 72 points), `type`, `date_begin`/`date_end` and `optimize=true`. Response shapes and
   units: docs/WEATHER-API.md; they are UNVERIFIED against the live service.
-* Metric to type: temperature to Temperature, humidity to Humidity, co2 to CO2, noise to
-  Noise, pressure to Pressure, rain to sum_rain (scale 1hour, drawn as bars), wind to
-  WindStrength. Metrics without a history type (trends, min/max, angles) are not offered.
+* Metric to type (the spec's lowercase spelling, `MEASURE_SPECS` in `history-parse.ts`):
+  temperature, humidity, co2, noise, pressure as named; rain to `sum_rain` (scale 1hour,
+  drawn as bars); wind to `windstrength`. The metrics without a history are "Pressure (alt.)"
+  (`absolutePressure`) and Gusts; the History key and the dial page answer `No history` for
+  them, and the Property Inspector's metric list for the History key offers only metrics
+  that have one.
 * Rendering: `src/render/sparkline.ts` (pure) draws a 144x144 SVG; no API strings in markup,
   gaps stay gaps (no interpolation across more than 2 steps), coordinates are quantised so
   image de-duplication works. Empty or error states follow the display table.
@@ -228,15 +255,23 @@ API, see above). What the plugin does to stay far below:
   `src/actions/history-slot.ts`);
 * there are no webhooks and no background history prefetch.
 
-The worst case is therefore a few dozen requests per hour, well below 500; the numbers
-depend on how many history keys are visible at once.
+Numbers: the poller at its 60 s floor is 60 requests per hour, at the default 12; every
+visible history key and window adds about 6 per hour (one per 10-minute cache lifetime). Optional
+traffic (history) is refused once 400 of the 500 hourly requests are used
+(`BUDGET_POLLER_RESERVE` in `src/adapter/station/budget.ts` keeps 100 for the poller). The
+total depends on how many history keys are visible at once; the plugin never gets near 500
+under normal use.
 
 ## Settings
 
+* The settings types are narrower than what the Property Inspector stores (it stores
+  strings, for example `alertAbove`); readers parse them (`focus/settings.ts`).
 * Per action: `MeasurementSettings` (module, metric, unit override, `followFocus`,
   `alertAbove`, `alertBelow`, `historyWindow`, `autoRotateSeconds`, `autoRotateStartOn`, …)
-  in `src/pi-protocol.ts`. No new secret-carrying message exists. The Property Inspector
-  has no read-out of the current focus.
+  in `src/pi-protocol.ts`. Settings carry no secrets (the credentials messages are separate
+  and never stored). The Property Inspector has no read-out of the current focus. In
+  `moduleKey`, an empty string means the user deliberately cleared it (the key then says
+  `Pick module`); only an absent value adopts a module automatically.
 * Global: `GlobalSettings` (poll interval, unit system) and `focus` (no secrets). One writer funnel
   (`updateGlobalSettings`), gated on a successful initial load; `plugin.ts` is the only
   caller of `setGlobalSettings` (a test greps for it). No secrets.
@@ -271,3 +306,11 @@ parameter properties, `.ts` extensions in all relative imports. The HTTP client 
 against a local `node:http` double (`baseUrl` is injectable). Pure renderers get unit
 tests; a bundle test checks that the built `bin/plugin.js` loads and registers (it looks
 for a log marker, not an exit code, and has a negative control).
+
+## Considered and deferred
+
+Two refactorings from the type review were not done and are not forgotten: a `Secret`
+wrapper class for tokens (so that `String()` or JSON serialisation cannot leak one) and
+branded types for station, module and device ids. Both are cross-cutting; the current
+defences (the redacting logger, a test that feeds known secrets through every logger,
+no secrets in settings) hold without them.

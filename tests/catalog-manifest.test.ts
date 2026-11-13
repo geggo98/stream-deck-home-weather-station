@@ -6,7 +6,7 @@
  * silently never works. This test makes it loud.
  */
 import { strict as assert } from "node:assert";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -34,6 +34,16 @@ describe("manifest drift", () => {
 
 	it("registers exactly the catalog's actions, in order", () => {
 		assert.deepEqual(committed.Actions.map((a) => a.UUID), ACTION_IDS.map(uuidFor));
+	});
+
+	it("gives EVERY action a Property Inspector page that exists, so the account section is reachable from any key", () => {
+		const missing = committed.Actions.filter((a) => !a.PropertyInspectorPath).map((a) => a.UUID);
+		assert.deepEqual(missing, [], "an action without a page leaves a first-time user without the account form");
+		for (const a of committed.Actions) {
+			assert.ok(existsSync(join(ROOT, PLUGIN_DIR_NAME, a.PropertyInspectorPath!)), `${a.UUID}: ${a.PropertyInspectorPath}`);
+		}
+		const navigation = FOCUS_SPECS.filter((spec) => "propertyInspector" in spec && spec.propertyInspector === "ui/navigation.html").map((spec) => spec.id);
+		assert.deepEqual(navigation, ["focus-refresh", "focus-next-metric", "focus-prev-metric", "focus-next-sensor", "focus-prev-sensor", "focus-next-station", "focus-prev-station"]);
 	});
 
 	it("keeps the plugin id in step between runtime and scripts, and folder name follows it", () => {

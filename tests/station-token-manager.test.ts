@@ -219,3 +219,73 @@ describe("TokenManager: failures", () => {
 		assert.doesNotThrow(() => new TokenManager({ logger: new RecordingLogger(), store: new MemoryCredentialStore(seed), baseUrl: "https://example.com" }));
 	});
 });
+
+describe("TokenManager: reset and generations", () => {
+	// Without `this.rejectedRefreshToken = undefined` in reset() the sticky rejection survives it:
+	// the user enters the SAME token again (it was rejected because of a service hiccup) and is refused without a request.
+	it("reset() clears the sticky rejection, so the SAME refresh token is sent again", async (t) => {
+		const api = await startApiDouble(t);
+		api.route(TOKEN, [(_req, res) => sendJson(res, 400, { error: "invalid_grant" }), tokenIssuer()]);
+		const tokens = new TokenManager({ logger: new RecordingLogger(), store: new MemoryCredentialStore(seed), baseUrl: api.baseUrl });
+		await assert.rejects(tokens.getAccessToken(), (e: unknown) => e instanceof NetatmoError && e.kind === "auth");
+		await assert.rejects(tokens.getAccessToken(), (e: unknown) => e instanceof NetatmoError && e.kind === "auth");
+		assert.equal(api.requestsTo(TOKEN).length, 1, "sticky before the reset");
+		tokens.reset();
+		assert.equal(await tokens.getAccessToken(), "fake-access-1");
+		assert.equal(api.requestsTo(TOKEN).length, 2);
+		assert.equal(new URLSearchParams(api.requestsTo(TOKEN)[1]!.body).get("refresh_token"), seed.refreshToken);
+	});
+
+	// Without the generation check at the top of persist()'s loop, the second attempt writes the
+	// rotated pair back after Clear (reset + clear) happened while the first attempt was blocked.
+	it("a retried write that is blocked while the credentials are cleared does not write them back", async (t) => {
+		const api = await startApiDouble(t);
+		api.route(TOKEN, tokenIssuer());
+		let mode: "fail" | "block" = "fail";
+		let release: () => void = () => undefined;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let saveCalls = 0;
+		let current: StoredCredentials | undefined = seed;
+		const store: CredentialStore = {
+			load: async () => current,
+			save: async () => {
+				saveCalls++;
+				if (mode === "fail") throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+				await gate;
+				throw Object.assign(new Error("late failure"), { code: "EIO" });
+			},
+			clear: async () => {
+				current = undefined;
+			},
+		};
+		const tokens = new TokenManager({ logger: new RecordingLogger(), store, baseUrl: api.baseUrl });
+		await tokens.getAccessToken(); // refresh works, both write attempts fail: unpersisted
+		assert.equal(tokens.hasUnpersistedRotation, true);
+		const callsBefore = saveCalls;
+		mode = "block";
+		const retry = tokens.getAccessToken(); // retries the write: attempt 1 blocks
+		await delay(20);
+		assert.equal(saveCalls, callsBefore + 1, "attempt 1 is waiting on the gate");
+		tokens.reset();
+		await store.clear();
+		release();
+		await retry.catch(() => undefined);
+		assert.equal(saveCalls, callsBefore + 1, "attempt 2 never started: the generation changed");
+		assert.equal(current, undefined, "nothing was written back after the clear");
+		assert.equal(tokens.hasUnpersistedRotation, false, "reset forgot the unpersisted pair");
+	});
+
+	it("adoptUnpersisted makes a pair the live one, flagged, and the next call writes it", async (t) => {
+		const api = await startApiDouble(t);
+		const store = new MemoryCredentialStore();
+		const tokens = new TokenManager({ logger: new RecordingLogger(), store, baseUrl: api.baseUrl, now: () => 1_700_000_000_000 });
+		tokens.adoptUnpersisted({ ...seed, refreshToken: "adopted-refresh", accessToken: "adopted-access", accessTokenExpiresAt: 1_700_000_000_000 + 3_600_000 });
+		assert.equal(tokens.hasUnpersistedRotation, true);
+		assert.equal(await tokens.getAccessToken(), "adopted-access");
+		assert.equal(api.requests.length, 0, "no request: the adopted access token is usable");
+		assert.equal(store.value?.refreshToken, "adopted-refresh", "the retry wrote it");
+		assert.equal(tokens.hasUnpersistedRotation, false);
+	});
+});

@@ -11,6 +11,7 @@
  *   1. `secretspec set NETATMO_REFRESH_TOKEN --from-file -` with the token on STDIN
  *      (never on the command line, never printed; `--from-file -` needs secretspec 0.21+);
  *   2. if that fails: a 0600 file in a private temp directory; only its PATH is printed.
+ *   3. if that fails too: the run exits non-zero with a message that the old token is invalid.
  * Do not run this probe against the refresh token the installed plugin uses: both would
  * invalidate each other. Generate a separate token pair for probing.
  *
@@ -31,7 +32,7 @@
  * of docs/WEATHER-API.md (shape, step_time, unit, holes) and prints the first/last timestamp
  * relative to the request (bucket start vs middle, local vs UTC; see HistoryPoint.t).
  *
- * Exit codes: 0 ok, 1 error, 2 authentication error.
+ * Exit codes: 0 ok, 1 error (also: the rotated token could not be stored anywhere), 2 authentication error.
  * NOT run against the live service by the author of this script (no credentials available).
  */
 
@@ -79,11 +80,15 @@ export interface PersistReport {
 export class ProbeStore implements CredentialStore {
 	current: StoredCredentials;
 	report: PersistReport | undefined;
+	/** True when the LAST `save` failed on both routes: the rotated token exists nowhere but in memory. */
+	persistFailed = false;
 	private readonly runSecretspec: (token: string) => { ok: boolean };
+	private readonly tempRoot: string;
 
-	constructor(initial: StoredCredentials, runSecretspec: (token: string) => { ok: boolean } = defaultSecretspecSet) {
+	constructor(initial: StoredCredentials, runSecretspec: (token: string) => { ok: boolean } = defaultSecretspecSet, tempRoot: string = os.tmpdir()) {
 		this.current = initial;
 		this.runSecretspec = runSecretspec;
+		this.tempRoot = tempRoot;
 	}
 
 	async load(): Promise<StoredCredentials | undefined> {
@@ -94,14 +99,27 @@ export class ProbeStore implements CredentialStore {
 		this.current = credentials;
 		if (this.runSecretspec(credentials.refreshToken).ok) {
 			this.report = { where: "secretspec" };
+			this.persistFailed = false;
 			return;
 		}
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hws-probe-"));
-		fs.chmodSync(dir, 0o700);
-		const file = path.join(dir, "refresh-token");
-		fs.writeFileSync(file, credentials.refreshToken, { flag: "wx", mode: 0o600 });
-		fs.chmodSync(file, 0o600);
-		this.report = { where: "file", path: file };
+		// Fallback: a 0600 file in a private directory. The file is KEPT on purpose (it is the
+		// only copy of the rotated token) and its path is reported; a half-written leftover is not.
+		let dir: string | undefined;
+		try {
+			dir = fs.mkdtempSync(path.join(this.tempRoot, "hws-probe-"));
+			fs.chmodSync(dir, 0o700);
+			const file = path.join(dir, "refresh-token");
+			fs.writeFileSync(file, credentials.refreshToken, { flag: "wx", mode: 0o600 });
+			fs.chmodSync(file, 0o600);
+			this.report = { where: "file", path: file };
+			this.persistFailed = false;
+		} catch (error) {
+			if (dir !== undefined) fs.rmSync(dir, { recursive: true, force: true });
+			this.persistFailed = true;
+			this.report = undefined;
+			// errno class only: the message could name a path, never a token, but keep it terse
+			throw new Error(`could not store the rotated refresh token (${(error as NodeJS.ErrnoException).code ?? "error"})`);
+		}
 	}
 
 	async clear(): Promise<void> {
@@ -328,6 +346,8 @@ export interface ProbeDeps {
 	/** Tests point this at a local double. */
 	readonly baseUrl?: string;
 	readonly runSecretspec?: (token: string) => { ok: boolean };
+	/** Directory for the fallback token file; default: the system temp directory. Tests point it somewhere broken. */
+	readonly tempRoot?: string;
 	/** Tests replace the git lookup and the repository root. */
 	readonly isIgnored?: (absolute: string) => boolean;
 	readonly repoRoot?: string;
@@ -365,7 +385,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv = process.env,
 		return 1;
 	}
 	const secrets = [clientSecret, refreshToken];
-	const store = new ProbeStore({ clientId, clientSecret, refreshToken }, deps.runSecretspec);
+	const store = new ProbeStore({ clientId, clientSecret, refreshToken }, deps.runSecretspec, deps.tempRoot);
 	const tokens = new TokenManager({ store, baseUrl: deps.baseUrl, logger: { debug() {}, info() {}, warn() {}, error: (m) => console.error(`token manager: ${redactSecrets(m, secrets)}`) } });
 	const client = new NetatmoClient({ tokens, baseUrl: deps.baseUrl, logger: { debug() {}, info() {}, warn() {}, error() {} } });
 	let exit = 0;
@@ -401,6 +421,10 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv = process.env,
 			console.error("unexpected error while probing");
 			exit = 1;
 		}
+	}
+	if (store.persistFailed) {
+		console.error("The rotated refresh token could NOT be stored (secretspec set failed and so did the temporary file). The old one is invalid: sign in again and create a new token pair.");
+		if (exit === 0) exit = 1;
 	}
 	return exit;
 }

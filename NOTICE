@@ -25,8 +25,10 @@ Third-party material
 - sdpi-components (MIT License), vendored for the Property Inspector, and Lit
   (BSD-3-Clause License), which that bundle contains. Exact versions, source URLs and
   hashes: de.schwetschke.sd.home-weather-station.sdPlugin/ui/vendor/VENDORED.md.
-- Stream Deck SDK for Node.js, @elgato/streamdeck (MIT License), bundled into the plugin's
-  bin/plugin.js. Its licence is in node_modules/@elgato/streamdeck/LICENSE after npm ci.
+- Code inlined into the plugin's bin/plugin.js by the bundler: @elgato/streamdeck,
+  @elgato/schemas and @elgato/utils (MIT License), ws (MIT License), zod (MIT License) and
+  tslib (0BSD License). The exact list and the licence texts are generated at build time into
+  THIRD-PARTY-NOTICES.txt next to the bundle.
 - Other npm dependencies are build-time tools and are not shipped in the plugin;
   `npm run scan` reports their licences.
 

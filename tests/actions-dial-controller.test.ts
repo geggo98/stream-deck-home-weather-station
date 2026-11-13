@@ -46,9 +46,9 @@ describe("DialController", () => {
 			seen.push(title(dial)!);
 		}
 		// base station: temperature, humidity, co2, noise, pressure, station pressure (then wraps)
-		assert.deepEqual(seen, ["Humidity", "CO2", "Noise", "Pressure", "Station pressure", "Temperature"]);
+		assert.deepEqual(seen, ["Humidity", "CO2", "Noise", "Pressure", "Pressure (alt.)", "Temperature"]);
 		controller.rotate(dial.id, -1);
-		assert.equal(title(dial), "Station pressure", "counter-clockwise goes back, wrapping");
+		assert.equal(title(dial), "Pressure (alt.)", "counter-clockwise goes back, wrapping");
 		controller.rotate(dial.id, 3);
 		assert.equal(title(dial), "CO2");
 	});

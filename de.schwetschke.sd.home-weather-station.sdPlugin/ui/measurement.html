@@ -26,9 +26,10 @@
 		</sdpi-item>
 		<p id="manualModuleHint" class="pi-hint pi-hidden"></p>
 		<p class="pi-hint">
-			Only needed when the list above stays empty. Station id and module id are the device
-			addresses of your station and of the module, written as <code>station id|module id</code>.
-			Leave this empty to use the first base station.
+			Only needed when the list above stays empty. Both ids are the MAC addresses of the devices, written
+			as <code>station id|module id</code>, for example
+			<code>00:00:5e:00:53:01|00:00:5e:00:53:02</code>. Leave this empty and the key picks a module
+			that reports its measurement.
 		</p>
 	</div>
 
@@ -39,7 +40,7 @@
 
 	<sdpi-item label="Units">
 		<sdpi-select setting="unitSystem" default="auto">
-			<option value="auto">Automatic (follow the account)</option>
+			<option value="auto">Automatic (use Default units)</option>
 			<option value="metric">Metric</option>
 			<option value="imperial">Imperial</option>
 		</sdpi-select>
@@ -96,12 +97,38 @@
 		<div class="pi-account-title">Weather station account</div>
 		<p id="accountStatus" class="pi-status pi-status-unknown" role="status">Waiting for the plugin&hellip;</p>
 
+		<p class="pi-hint">
+			Recommended: register <code>http://localhost:53682/callback</code> as redirect URI in your own
+			app at dev.netatmo.com, enter Client ID and Client secret, then use "Sign in with browser".
+			Alternative: paste a refresh token and press "Save and test". Tick only the scope read_station
+			(no write or access scopes). Everything you enter stays on this computer.
+		</p>
+
 		<sdpi-item label="Client ID">
 			<input id="clientId" class="pi-input" type="text" autocomplete="off" spellcheck="false" />
 		</sdpi-item>
 		<sdpi-item label="Client secret">
 			<input id="clientSecret" class="pi-input" type="password" autocomplete="off" spellcheck="false" />
 		</sdpi-item>
+
+		<details id="browserLoginBox" class="pi-details" open>
+			<summary>Sign in with browser (recommended)</summary>
+			<p class="pi-hint">
+				Not yet verified against the real service. This redirect URI must be registered in your
+				Netatmo app before the sign-in can succeed:
+			</p>
+			<div id="redirectUri" class="pi-code">http://localhost:53682/callback</div>
+			<p class="pi-hint">
+				The secret is wiped from the field when you press the button. If you need a second try,
+				enter it again.
+			</p>
+			<div class="pi-buttons">
+				<button id="startBrowserLogin" class="pi-button" type="button">Sign in with browser</button>
+			</div>
+			<p id="browserLoginResult" class="pi-hint" role="status"></p>
+		</details>
+
+		<div class="pi-account-title">Or paste a refresh token</div>
 		<sdpi-item label="Refresh token">
 			<input id="refreshToken" class="pi-input" type="password" autocomplete="off" spellcheck="false" />
 		</sdpi-item>
@@ -112,26 +139,6 @@
 			<button id="refreshNow" class="pi-button" type="button">Refresh now</button>
 		</div>
 		<p id="accountResult" class="pi-hint" role="status"></p>
-
-		<p class="pi-hint">
-			Create your own app in the Netatmo developer portal. When you generate or authorise a token,
-			tick only the scope read_station (no write or access scopes), and paste the values here.
-			They stay on this computer.
-		</p>
-
-		<details id="browserLoginBox" class="pi-details">
-			<summary>Sign in with browser (experimental)</summary>
-			<p class="pi-hint">
-				Experimental and not verified against the real service. Enter the Client ID and Client secret
-				above, then press the button. This address is shown, and it must be registered as a redirect
-				URI in your app before the sign-in can succeed. Register it, then press the button again.
-			</p>
-			<div id="redirectUri" class="pi-code">Shown after the first press.</div>
-			<div class="pi-buttons">
-				<button id="startBrowserLogin" class="pi-button" type="button">Sign in with browser</button>
-			</div>
-			<p id="browserLoginResult" class="pi-hint" role="status"></p>
-		</details>
 
 		<div class="pi-account-title">Plugin settings</div>
 		<sdpi-item label="Update interval">

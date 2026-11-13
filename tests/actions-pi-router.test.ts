@@ -1,7 +1,7 @@
 /** PI messages with a fake service: shapes, validation, secret hygiene. */
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
-import { createPiRouter, metricItems, moduleItems, MAX_CREDENTIAL_CHARS } from "../src/actions/pi-router.ts";
+import { createPiRouter, metricItems, moduleItems, MAX_CREDENTIAL_CHARS, SETTINGS_WRITE_FAILED_MESSAGE } from "../src/actions/pi-router.ts";
 import { PI_EVENTS, type GlobalSettings } from "../src/pi-protocol.ts";
 import { makeModuleKey } from "../src/render/select.ts";
 import { baseModule, BASE_ID, FakeService, makeSnapshot, NOW, outdoorModule, RecordingLogger, STATION_ID } from "./actions-fixtures.ts";
@@ -17,7 +17,7 @@ function setup(service: FakeService | undefined = new FakeService(makeSnapshot()
 	const router = createPiRouter({
 		getService: () => service,
 		reply: async (payload) => {
-			sent.push(payload);
+			sent.push({ ...payload });
 		},
 		openUrl: async (url) => {
 			opened.push(url);
@@ -119,7 +119,7 @@ describe("datasources", () => {
 	});
 
 	it("cleans untrusted module names", () => {
-		const items = moduleItems(makeSnapshot([baseModule({ name: "A\u0000B‮C" })]));
+		const items = moduleItems(makeSnapshot([baseModule({ name: "A\u0000B\u202eC" })]));
 		assert.equal(items[0]?.label, "A B C (base station)");
 	});
 });
@@ -168,12 +168,14 @@ describe("credentials", () => {
 		assert.equal(logger.lines.join("\n").includes(SECRET), false, "an exception message may carry the secret");
 	});
 
-	it("clears credentials and refreshes on request", async () => {
+	it("clears credentials (answering clearResult ok) and refreshes on request", async () => {
 		const service = new FakeService(makeSnapshot());
 		const { router, sent } = setup(service);
 		await router.handle("a", { event: PI_EVENTS.clearCredentials });
 		assert.equal(service.cleared, 1);
-		assert.equal(last(sent).event, PI_EVENTS.accountStatus);
+		assert.equal(last(sent).event, PI_EVENTS.clearResult);
+		assert.equal(last(sent).ok, true);
+		assert.equal("error" in last(sent), false);
 		await router.handle("a", { event: PI_EVENTS.refreshNow });
 		assert.equal(service.refreshCalls, 1);
 	});
@@ -241,7 +243,7 @@ describe("global settings messages", () => {
 		const router = createPiRouter({
 			getService: () => service,
 			reply: async (p) => {
-				sent.push(p);
+				sent.push({ ...p });
 			},
 			openUrl: async () => {},
 			getActionSettings: () => undefined,
@@ -253,7 +255,7 @@ describe("global settings messages", () => {
 		});
 		await router.handle("a", { event: PI_EVENTS.setGlobalSettings, pollIntervalSeconds: 120 });
 		assert.equal(service.pollSeconds, undefined);
-		assert.deepEqual(sent.at(-1), { event: PI_EVENTS.globalSettings, pollIntervalSeconds: 600, unitSystem: "account" });
+		assert.deepEqual(sent.at(-1), { event: PI_EVENTS.globalSettings, pollIntervalSeconds: 600, unitSystem: "account", error: SETTINGS_WRITE_FAILED_MESSAGE });
 	});
 
 	it("ignores a non-numeric poll interval", async () => {

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<title>Navigation Settings</title>
+	<meta charset="utf-8" />
+	<meta http-equiv="Content-Security-Policy"
+		content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ws://127.0.0.1:* ws://localhost:*; base-uri 'none'; form-action 'none'" />
+	<script src="vendor/sdpi-components.js"></script>
+	<script src="home-weather-pi.js"></script>
+	<link rel="stylesheet" href="home-weather-pi.css" />
+</head>
+
+<body>
+	<p class="pi-hint">
+		This key needs no settings of its own. It only moves the plugin-wide focus or fetches data:
+	</p>
+	<p class="pi-hint">
+		<strong>Next / previous value</strong> steps through the measurements of the focused sensor.
+		<strong>Next / previous sensor</strong> shows the same measurement on the next sensor (dimmed when no
+		other sensor reports it).
+		<strong>Next / previous station</strong> switches the station (dimmed when there is only one).
+		<strong>Reload</strong> fetches the newest cloud data (it cannot make the station measure; at most once
+		a minute).
+	</p>
+	<p class="pi-hint">
+		The focus display, the dial and the history keys that follow the focus repaint when it moves.
+		Your account is set up in the section below, the same one as on every other key.
+	</p>
+
+	<div class="sdpi-divider" style="margin: 16px 0;"></div>
+
+	<section id="account">
+		<div class="pi-account-title">Weather station account</div>
+		<p id="accountStatus" class="pi-status pi-status-unknown" role="status">Waiting for the plugin&hellip;</p>
+
+		<p class="pi-hint">
+			Recommended: register <code>http://localhost:53682/callback</code> as redirect URI in your own
+			app at dev.netatmo.com, enter Client ID and Client secret, then use "Sign in with browser".
+			Alternative: paste a refresh token and press "Save and test". Tick only the scope read_station
+			(no write or access scopes). Everything you enter stays on this computer.
+		</p>
+
+		<sdpi-item label="Client ID">
+			<input id="clientId" class="pi-input" type="text" autocomplete="off" spellcheck="false" />
+		</sdpi-item>
+		<sdpi-item label="Client secret">
+			<input id="clientSecret" class="pi-input" type="password" autocomplete="off" spellcheck="false" />
+		</sdpi-item>
+
+		<details id="browserLoginBox" class="pi-details" open>
+			<summary>Sign in with browser (recommended)</summary>
+			<p class="pi-hint">
+				Not yet verified against the real service. This redirect URI must be registered in your
+				Netatmo app before the sign-in can succeed:
+			</p>
+			<div id="redirectUri" class="pi-code">http://localhost:53682/callback</div>
+			<p class="pi-hint">
+				The secret is wiped from the field when you press the button. If you need a second try,
+				enter it again.
+			</p>
+			<div class="pi-buttons">
+				<button id="startBrowserLogin" class="pi-button" type="button">Sign in with browser</button>
+			</div>
+			<p id="browserLoginResult" class="pi-hint" role="status"></p>
+		</details>
+
+		<div class="pi-account-title">Or paste a refresh token</div>
+		<sdpi-item label="Refresh token">
+			<input id="refreshToken" class="pi-input" type="password" autocomplete="off" spellcheck="false" />
+		</sdpi-item>
+
+		<div class="pi-buttons">
+			<button id="saveCredentials" class="pi-button" type="button">Save and test</button>
+			<button id="clearCredentials" class="pi-button" type="button">Clear</button>
+			<button id="refreshNow" class="pi-button" type="button">Refresh now</button>
+		</div>
+		<p id="accountResult" class="pi-hint" role="status"></p>
+
+		<div class="pi-account-title">Plugin settings</div>
+		<sdpi-item label="Update interval">
+			<select id="pollInterval" class="pi-input">
+				<option value="60">1 min</option>
+				<option value="300" selected>5 min</option>
+				<option value="600">10 min</option>
+				<option value="1800">30 min</option>
+				<option value="3600">60 min</option>
+			</select>
+		</sdpi-item>
+		<p class="pi-hint">
+			Netatmo refreshes station data about every 10 minutes, so shorter intervals mostly cost API budget.
+			This applies to all keys and dials.
+		</p>
+		<sdpi-item label="Default units">
+			<select id="globalUnits" class="pi-input">
+				<option value="account" selected>Follow account</option>
+				<option value="metric">Metric</option>
+				<option value="imperial">Imperial</option>
+			</select>
+		</sdpi-item>
+		<p class="pi-hint">Used by every key whose own Units setting is Automatic.</p>
+
+		<p class="pi-hint pi-notice">Unofficial plugin, not affiliated with Netatmo, Elgato or Corsair.</p>
+	</section>
+
+	<script src="init/navigation.js"></script>
+</body>
+
+</html>

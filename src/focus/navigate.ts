@@ -13,7 +13,7 @@
 
 import type { MetricKey, ModuleData, StationData, StationSnapshot } from "../adapter/station/types.ts";
 import { DIAL_METRIC_ORDER, METRICS, metricsReportedBy, moduleReports, type DisplayMetricId } from "../render/metrics.ts";
-import { makeModuleKey } from "../render/select.ts";
+import { MODULE_KEY_SEPARATOR, makeModuleKey } from "../render/select.ts";
 
 export interface Focus {
 	readonly stationId: string;
@@ -51,7 +51,9 @@ export function sameFocus(a: Focus | undefined, b: Focus | undefined): boolean {
 export function parseFocus(raw: unknown): Focus | undefined {
 	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
 	const { stationId, moduleId, metric } = raw as Record<string, unknown>;
-	const idOk = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= MAX_ID_CHARS;
+	// "|" separates station and module in a module key (render/select.ts): an id that contains it
+	// could not be told apart from two ids, so it is not an id.
+	const idOk = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= MAX_ID_CHARS && !v.includes(MODULE_KEY_SEPARATOR);
 	if (!idOk(stationId) || !idOk(moduleId) || typeof metric !== "string") return undefined;
 	if (!BY_SOURCE.has(metric as MetricKey)) return undefined;
 	return { stationId, moduleId, metric: metric as MetricKey };

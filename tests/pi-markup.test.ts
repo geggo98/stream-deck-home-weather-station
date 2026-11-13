@@ -15,7 +15,7 @@ import { test } from "node:test";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ui = join(root, "de.schwetschke.sd.home-weather-station.sdPlugin", "ui");
-const PAGES = ["measurement.html", "dial.html", "focus.html", "auto-rotate.html", "info.html", "history.html"] as const;
+const PAGES = ["measurement.html", "dial.html", "focus.html", "auto-rotate.html", "info.html", "history.html", "navigation.html"] as const;
 
 const VOID = new Set(["meta", "link", "input", "br", "hr", "img", "area", "base", "col", "source", "wbr"]);
 
@@ -90,8 +90,8 @@ for (const page of PAGES) {
 		const used = tags(read(page))
 			.filter((t) => "setting" in t.attrs)
 			.map((t) => t.attrs.setting as string);
-		// info.html has no setting at all; every other page binds at least one.
-		if (page !== "info.html") assert.ok(used.length >= 1, "found no setting bindings; the scan sees nothing");
+		// info.html and navigation.html have no setting at all; every other page binds at least one.
+		if (page !== "info.html" && page !== "navigation.html") assert.ok(used.length >= 1, "found no setting bindings; the scan sees nothing");
 		for (const key of used) assert.ok(known.has(key), `${page}: setting="${key}" is not a MeasurementSettings key`);
 	});
 
@@ -177,17 +177,26 @@ for (const page of PAGES) {
 		assert.match(block, /<option value="300" selected>5 min/);
 		assert.ok(block.includes("about every 10 minutes"));
 		assert.ok(!/<(select|input)[^>]*\bsetting=/.test(block), "account block controls must not carry a setting binding");
-		assert.ok(block.includes("They stay on this computer."));
+		assert.ok(block.includes("Everything you enter stays on this computer."));
 		assert.ok(block.includes("Unofficial plugin, not affiliated with Netatmo, Elgato or Corsair."));
-		assert.match(block, /<details id="browserLoginBox"/);
-		assert.ok(!/<details[^>]*\bopen\b/.test(block), "the browser sign-in must start collapsed");
+		assert.match(block, /<details id="browserLoginBox"[^>]*\bopen\b/, "the recommended browser sign-in must start open");
+		assert.ok(block.includes("dev.netatmo.com"), "the help text must name the developer portal");
+		assert.ok(block.includes("Recommended: register"), "the help text must lead with the recommended route");
+		// Order: the browser sign-in comes before the paste route's token field and Save button.
+		assert.ok(block.indexOf('id="startBrowserLogin"') < block.indexOf('id="refreshToken"'), "browser sign-in must come first");
+		assert.ok(block.indexOf('id="refreshToken"') < block.indexOf('id="saveCredentials"'));
 	});
 }
 
-test("both pages carry a byte-identical account block (whitespace normalised)", () => {
-	const [a, b] = PAGES.map((p) => accountBlock(read(p)));
-	assert.ok(a && a.length > 800, "account block suspiciously short");
-	assert.equal(a, b);
+test("every page carries a byte-identical account block (whitespace normalised)", () => {
+	const blocks = PAGES.map((p) => accountBlock(read(p)));
+	assert.ok(blocks[0] && blocks[0].length > 800, "account block suspiciously short");
+	assert.equal(blocks.length, 7);
+	for (const [i, b] of blocks.entries()) assert.equal(b, blocks[0], `${PAGES[i]} differs from ${PAGES[0]}`);
+});
+
+test("every HTML file in ui/ is in the page list (a new page cannot dodge the checks)", () => {
+	assert.deepEqual(readdirSync(ui).filter((f) => f.endsWith(".html")).sort(), [...PAGES].sort());
 });
 
 test("measurement page offers module, metric, units, trend, min/max, big text and label", () => {
@@ -256,9 +265,14 @@ test("PI pages: no brand word in headings or section titles", () => {
 test("dial page: followFocus defaults to on and the gesture legend names every gesture", () => {
 	assert.equal(bound("dial.html").get("followFocus")?.attrs.default, "true");
 	const text = read("dial.html").replace(/\s+/g, " ");
-	for (const phrase of ["Rotate: next value", "Push: next sensor", "Push and rotate: next station", "Tap the touch strip: reload", "Long touch: minimum and maximum"]) {
+	for (const phrase of ["Rotate: next value", "Push: next sensor", "Push and rotate: next station", "Tap the touch strip: reload"]) {
 		assert.ok(text.includes(phrase), `dial legend lacks "${phrase}"`);
 	}
+	// dial-controller.ts: value -> min/max (temperature only) -> 24 h mini history (where available) -> value
+	assert.ok(
+		text.includes("Long touch: cycles value &rarr; minimum and maximum (temperature only) &rarr; 24 h mini history (where available) &rarr; value."),
+		"long-touch text must describe the real cycle",
+	);
 });
 
 test("focus page: units, trend, min/max, no alert fields, no module or metric pickers, explains the navigation keys", () => {
@@ -287,6 +301,37 @@ test("auto-rotate page: interval 3..60 (default 8) and start-on checkbox", () =>
 test("info page: explanation and account block only, no settings", () => {
 	assert.equal(bound("info.html").size, 0);
 	assert.match(read("info.html"), /battery/);
+	assert.ok(!/radio|signal/i.test(read("info.html").replace(/<section id="account">[\s\S]*<\/section>/, "")), "info page promises a page that does not exist");
+});
+
+test("the three automatic-unit selects say what Automatic follows", () => {
+	for (const page of ["measurement.html", "dial.html", "focus.html"]) {
+		const html = read(page);
+		assert.ok(html.includes('<option value="auto">Automatic (use Default units)</option>'), page);
+		assert.ok(!html.includes("follow the account"), page);
+	}
+});
+
+test("manual module key help: ids are MAC addresses with a documentation-range example", () => {
+	for (const page of ["measurement.html", "dial.html", "history.html"]) {
+		const text = read(page).replace(/\s+/g, " ");
+		assert.ok(text.includes("MAC addresses"), page);
+		assert.ok(text.includes("00:00:5e:00:53:01|00:00:5e:00:53:02"), page);
+	}
+	for (const page of ["measurement.html", "history.html"]) {
+		assert.ok(read(page).replace(/\s+/g, " ").includes("the key picks a module that reports its measurement"), page);
+	}
+});
+
+test("navigation page: explains every key, has the account block, no unit select, no settings", () => {
+	assert.equal(bound("navigation.html").size, 0);
+	const html = read("navigation.html");
+	const outside = html.replace(/<section id="account">[\s\S]*<\/section>/, "").replace(/\s+/g, " ");
+	for (const phrase of ["Next / previous value", "Next / previous sensor", "Next / previous station", "Reload", "at most once a minute", "cannot make the station measure"]) {
+		assert.ok(outside.includes(phrase), `navigation page lacks "${phrase}"`);
+	}
+	assert.ok(!/unitSystem|label="Units"/.test(outside), "the navigation keys have no unit setting");
+	assert.match(html, /<title>Navigation Settings<\/title>/);
 });
 
 test("history page: window 6h/24h/3d, followFocus default on, pickers inside #pinnedBlock", () => {
@@ -309,6 +354,7 @@ test("page init scripts exist for every page and name the right initialisers", (
 		["focus", ["initAccount"]],
 		["auto-rotate", ["initAccount"]],
 		["info", ["initAccount"]],
+		["navigation", ["initAccount"]],
 		["history", ["initModulePicker", "initFollowToggle", "initAccount"]],
 	] as const) {
 		const js = readFileSync(join(ui, "init", `${name}.js`), "utf8");

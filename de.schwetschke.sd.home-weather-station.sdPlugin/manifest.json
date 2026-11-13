@@ -168,7 +168,8 @@
           "Image": "imgs/actions/focus-refresh/key",
           "TitleAlignment": "bottom"
         }
-      ]
+      ],
+      "PropertyInspectorPath": "ui/navigation.html"
     },
     {
       "Name": "Next Value",
@@ -183,7 +184,8 @@
           "Image": "imgs/actions/focus-next-metric/key",
           "TitleAlignment": "bottom"
         }
-      ]
+      ],
+      "PropertyInspectorPath": "ui/navigation.html"
     },
     {
       "Name": "Previous Value",
@@ -198,7 +200,8 @@
           "Image": "imgs/actions/focus-prev-metric/key",
           "TitleAlignment": "bottom"
         }
-      ]
+      ],
+      "PropertyInspectorPath": "ui/navigation.html"
     },
     {
       "Name": "Next Sensor",
@@ -213,7 +216,8 @@
           "Image": "imgs/actions/focus-next-sensor/key",
           "TitleAlignment": "bottom"
         }
-      ]
+      ],
+      "PropertyInspectorPath": "ui/navigation.html"
     },
     {
       "Name": "Previous Sensor",
@@ -228,7 +232,8 @@
           "Image": "imgs/actions/focus-prev-sensor/key",
           "TitleAlignment": "bottom"
         }
-      ]
+      ],
+      "PropertyInspectorPath": "ui/navigation.html"
     },
     {
       "Name": "Next Station",
@@ -243,7 +248,8 @@
           "Image": "imgs/actions/focus-next-station/key",
           "TitleAlignment": "bottom"
         }
-      ]
+      ],
+      "PropertyInspectorPath": "ui/navigation.html"
     },
     {
       "Name": "Previous Station",
@@ -258,7 +264,8 @@
           "Image": "imgs/actions/focus-prev-station/key",
           "TitleAlignment": "bottom"
         }
-      ]
+      ],
+      "PropertyInspectorPath": "ui/navigation.html"
     },
     {
       "Name": "Auto Rotate",

@@ -14,7 +14,7 @@ npm ci
 ```
 
 Git hooks (installed by devenv) check the commit message (Conventional Commits), refuse a manifest
-with a `Nodejs.Debug` key, refuse raw control bytes in sources and run `gitleaks` on staged files with `.gitleaks.toml`. That file allows only the fake sentinel
+with a `Nodejs.Debug` key, refuse raw control bytes and invisible or bidirectional Unicode characters in sources (write them as `\u` escapes) and run `gitleaks` on staged files with `.gitleaks.toml`. That file allows only the fake sentinel
 secrets of two named tests; a test that needs another fake secret should build it at run time or
 use the same `CS-/RT-/AT-distinctive-` sentinel shape, not widen the allowlist.
 `osv-scanner` runs before push.

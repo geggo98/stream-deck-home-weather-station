@@ -4,8 +4,10 @@ import { setAdapterLogger } from "./adapter/logging.ts";
 import { createWeatherService } from "./adapter/station/create-service.ts";
 import { ACTION_IDS } from "./actions/catalog.ts";
 import {
+	asGlobalSettings,
 	getCachedGlobalSettings,
-	markGlobalSettingsLoaded,
+	globalSettingsError,
+	loadGlobalSettingsWithRetry,
 	onGlobalSettingsChanged,
 	pollIntervalOf,
 	setCachedGlobalSettings,
@@ -13,14 +15,17 @@ import {
 	updateGlobalSettings,
 	getRememberedActionSettings,
 	getRememberedDefaultMetric,
+	isRememberedHistoryAction,
 } from "./actions/global-settings.ts";
+import { chooseLogLevel } from "./actions/log-level.ts";
 import { createFocusActions } from "./actions/focus-keys.ts";
 import { createKeypadActions } from "./actions/measurement-keys.ts";
 import { createPiRouter } from "./actions/pi-router.ts";
 import { disposeControllers, setPiRouter } from "./actions/runtime.ts";
 import { getWeatherService, setWeatherService } from "./actions/service-holder.ts";
 import { WeatherDialAction } from "./actions/weather-dial.ts";
-import { PI_EVENTS, type GlobalSettings } from "./pi-protocol.ts";
+import type { JsonValue } from "@elgato/utils";
+import { PI_EVENTS, type GlobalSettings, type PluginToPiMessage } from "./pi-protocol.ts";
 
 // Log level. TRACE makes the SDK dump every WebSocket frame, which means complete settings
 // objects land in the plugin's log files (plaintext, up to 10 x 50 MB, routinely attached to
@@ -30,8 +35,9 @@ import { PI_EVENTS, type GlobalSettings } from "./pi-protocol.ts";
 // `minimumLevel: isDebugMode() ? "trace" : "debug"`, and an out-of-range level RESETS to
 // "info" instead of clamping. So the honest ceiling off the `npm run watch` loop is
 // "debug". (Observed in a sibling project against the SDK's own logger; not re-measured.)
-const requestedLevel = process.env.HOME_WEATHER_LOG_LEVEL ?? (process.env.HOME_WEATHER_DEBUG ? "debug" : "info");
-streamDeck.logger.setLevel(requestedLevel as Parameters<typeof streamDeck.logger.setLevel>[0]);
+const logLevel = chooseLogLevel(process.env);
+streamDeck.logger.setLevel(logLevel.level);
+if (logLevel.ignored !== undefined) streamDeck.logger.warn(`HOME_WEATHER_LOG_LEVEL="${logLevel.ignored}" is not a log level (error, warn, info, debug, trace); using "${logLevel.level}"`);
 
 // Node runs with unhandled rejections fatal, and the SDK's own safety net is a
 // `process.once("uncaughtException", ...)`: it absorbs exactly one escaped error and the
@@ -58,10 +64,12 @@ streamDeck.actions.registerAction(new WeatherDialAction());
 streamDeck.logger.info(`Home Weather Station: registered ${ACTION_IDS.length} actions`);
 
 // The settings funnel: keep the cache fresh, hand the SDK writer to the (SDK-free) module.
-streamDeck.settings.onDidReceiveGlobalSettings((ev) => setCachedGlobalSettings(ev.settings as GlobalSettings));
+streamDeck.settings.onDidReceiveGlobalSettings((ev) => setCachedGlobalSettings(asGlobalSettings(ev.settings)));
 setGlobalSettingsWriter((gs) => streamDeck.settings.setGlobalSettings(gs as Parameters<typeof streamDeck.settings.setGlobalSettings>[0]));
 
-streamDeck.connect();
+streamDeck.connect().catch((err) => {
+	streamDeck.logger.error(`Connecting to Stream Deck failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+});
 
 // The service is created here, at connect time, never at import time: a failing
 // constructor then costs the data, not the bundle load (and the bundle test).
@@ -81,18 +89,24 @@ function applyPollInterval(): void {
 }
 onGlobalSettingsChanged(applyPollInterval);
 
-/** Our payloads are plain JSON objects; the SDK type is JsonValue, which interfaces do not satisfy. */
-function toPiPayload(payload: object): Parameters<typeof streamDeck.ui.sendToPropertyInspector>[0] {
-	return payload as unknown as Parameters<typeof streamDeck.ui.sendToPropertyInspector>[0];
+/**
+ * Our messages are interfaces; the SDK type is JsonValue, which interfaces do not satisfy.
+ * Serialising is the honest conversion (it is what the SDK does next anyway) and needs no cast
+ * of our types; `undefined` fields drop out here exactly as they would on the wire.
+ */
+function toPiPayload(message: PluginToPiMessage): JsonValue {
+	return JSON.parse(JSON.stringify(message));
 }
 
 const router = createPiRouter({
 	getService: getWeatherService,
-	reply: (payload) => streamDeck.ui.sendToPropertyInspector(toPiPayload(payload)),
+	reply: (message) => streamDeck.ui.sendToPropertyInspector(toPiPayload(message)),
 	openUrl: (url) => streamDeck.system.openUrl(url),
 	getActionSettings: getRememberedActionSettings,
 	getActionDefaultMetric: getRememberedDefaultMetric,
+	isHistoryAction: isRememberedHistoryAction,
 	getGlobal: getCachedGlobalSettings,
+	getGlobalError: globalSettingsError,
 	updateGlobal: updateGlobalSettings,
 	logger: streamDeck.logger,
 });
@@ -119,15 +133,9 @@ streamDeck.ui.onDidDisappear(() => {
 });
 
 // Load persisted global settings once connected.
-streamDeck.settings
-	.getGlobalSettings()
-	.then((gs) => {
-		setCachedGlobalSettings(gs as GlobalSettings);
-		// Only now may anything write the global settings back: until this point the cache
-		// every writer merges over is empty (see updateGlobalSettings).
-		markGlobalSettingsLoaded();
-	})
-	.catch((err) => streamDeck.logger.error(`Failed to load global settings: ${err}`));
+// Retried; when it still fails the PI says so (globalSettings.error) instead of silently
+// snapping every change back.
+void loadGlobalSettingsWithRetry(() => streamDeck.settings.getGlobalSettings(), { logger: streamDeck.logger });
 
 function shutdown(): void {
 	disposeControllers();

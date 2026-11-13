@@ -73,17 +73,21 @@ export function faceForStatus(kind: Exclude<Classification["kind"], "value" | "u
  * unreachable module or a missing measurement keeps showing, dimmed.
  */
 export function statusFace(classification: Classification, glyph: GlyphName): { svg: string; title: string } | undefined {
-	if (classification.kind === "value") return undefined;
-	if (classification.kind === "unreachable" || classification.kind === "no-data") {
+	return classification.kind === "value" ? undefined : statusFaceOf(classification.kind, glyph);
+}
+
+/** `statusFace` for a kind that is known not to be a value: always a face. */
+export function statusFaceOf(kind: Exclude<Classification["kind"], "value">, glyph: GlyphName): { svg: string; title: string } {
+	if (kind === "unreachable" || kind === "no-data") {
 		return {
-			svg: composeTile({ glyph, accent: NEUTRAL_COLOUR, dim: true, status: classification.kind === "unreachable" ? "warn" : "idle" }),
-			title: statusWord(classification.kind),
+			svg: composeTile({ glyph, accent: NEUTRAL_COLOUR, dim: true, status: kind === "unreachable" ? "warn" : "idle" }),
+			title: statusWord(kind),
 		};
 	}
-	const face = faceForStatus(classification.kind);
+	const face = faceForStatus(kind);
 	return {
 		svg: composeTile({ glyph: face.glyph, accent: face.accent, dim: face.dim, status: face.status }),
-		title: statusWord(classification.kind),
+		title: statusWord(kind),
 	};
 }
 
@@ -107,7 +111,7 @@ export function buildKeyView(input: KeyViewInput): KeyView {
 	if (status) return { svg: status.svg, title: status.title, classification };
 	if (classification.kind !== "value") throw new Error("unreachable: statusFace covers every non-value");
 
-	const { selected, value, stale, ageMs } = classification;
+	const { selected, value, stale, ageMs, warning } = classification;
 	const units = resolveUnits(
 		input.settings.unitSystem,
 		input.global.unitSystem,
@@ -125,7 +129,8 @@ export function buildKeyView(input: KeyViewInput): KeyView {
 	const max = def.max ? values[def.max] : undefined;
 	const hasMinMax = typeof min === "number" && Number.isFinite(min) && typeof max === "number" && Number.isFinite(max);
 	const trend = input.settings.showTrend === true && def.trend ? trendOf(values[def.trend]) : undefined;
-	const tileStatus: TileSpec["status"] = stale ? "stale" : "ok";
+	// "notice" (unsaved sign-in) is a dot only: the value stays at full strength. Staleness wins when both apply.
+	const tileStatus: TileSpec["status"] = stale ? "stale" : warning ? "notice" : "ok";
 
 	// Overlay: today's extremes instead of the value. Status beats metadata, so it is only
 	// reachable here, i.e. never while a status word has taken over.

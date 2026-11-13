@@ -5,6 +5,8 @@ import { nextMetric, nextModule, nextStation, parseFocus, resolveFocus, sameFocu
 import {
 	baseModule,
 	BASE_B_ID,
+	MIN,
+	NOW,
 	BASE_ID,
 	makeSnapshot,
 	makeTwoStationSnapshot,
@@ -119,5 +121,45 @@ describe("nextStation", () => {
 		const result = nextStation(makeSnapshot(), atBase, 1)!;
 		assert.equal(result.blocked, true);
 		assert.deepEqual(result.focus, atBase);
+	});
+});
+
+describe("the previous direction", () => {
+	// Three temperature modules in one station (base, outdoor, extra indoor), then three stations:
+	// with two of anything, "+1" and "-1" land on the same entry and cannot be told apart.
+	const extraIndoor = { ...baseModule(), id: "00:00:5e:00:53:05", role: "indoor-extra" as const, name: "Bedroom", measuredAt: NOW - 2 * MIN, values: { temperature: 19.5, humidity: 50 } };
+	const threeModules = makeSnapshot([baseModule(), { ...baseModule(), id: OUTDOOR_ID, role: "outdoor" as const, name: "Garden", values: { temperature: 8, humidity: 80 } }, extraIndoor]);
+	const third = { id: "00:00:5e:00:53:21", name: "Third Station", modules: [baseModule({ id: "00:00:5e:00:53:21", name: "Cellar", values: { temperature: 12, humidity: 60 } })] };
+	const threeStations = { ...makeTwoStationSnapshot(), stations: [...makeTwoStationSnapshot().stations, third] };
+
+	it("nextModule: next and previous differ, and previous wraps from the first module to the last", () => {
+		const atOutdoor: Focus = { stationId: STATION_ID, moduleId: OUTDOOR_ID, metric: "temperature" };
+		assert.equal(nextModule(threeModules, atOutdoor, 1)?.focus.moduleId, extraIndoor.id);
+		assert.equal(nextModule(threeModules, atOutdoor, -1)?.focus.moduleId, BASE_ID);
+		assert.equal(nextModule(threeModules, atBase, -1)?.focus.moduleId, extraIndoor.id, "wraps backwards");
+		assert.equal(nextModule(threeModules, atBase, 1)?.focus.moduleId, OUTDOOR_ID);
+	});
+
+	it("nextStation: next and previous differ with three stations, and both wrap", () => {
+		const at = (stationId: string, moduleId: string): Focus => ({ stationId, moduleId, metric: "temperature" });
+		assert.equal(nextStation(threeStations, atBase, 1)?.focus.stationId, STATION_B_ID);
+		assert.equal(nextStation(threeStations, atBase, -1)?.focus.stationId, third.id, "previous from the first wraps to the last");
+		assert.equal(nextStation(threeStations, at(STATION_B_ID, BASE_B_ID), -1)?.focus.stationId, STATION_ID);
+		assert.equal(nextStation(threeStations, at(third.id, third.id), 1)?.focus.stationId, STATION_ID, "next from the last wraps to the first");
+		assert.equal(nextStation(threeStations, at(third.id, third.id), -1)?.focus.stationId, STATION_B_ID);
+	});
+
+	it("nextMetric: previous from the first metric wraps to the last the module reports", () => {
+		const list = ["temperature", "humidity", "co2", "noise", "pressure", "absolutePressure"] as const;
+		assert.equal(nextMetric(two, atBase, -1)?.focus.metric, list.at(-1));
+		assert.equal(nextMetric(two, atBase, 1)?.focus.metric, list[1]);
+	});
+});
+
+describe("ids that contain the module key separator", () => {
+	it("are not ids (a module key could not be told apart from two ids)", () => {
+		assert.equal(parseFocus({ stationId: "a|b", moduleId: BASE_ID, metric: "temperature" }), undefined);
+		assert.equal(parseFocus({ stationId: STATION_ID, moduleId: "a|b", metric: "temperature" }), undefined);
+		assert.ok(parseFocus({ stationId: STATION_ID, moduleId: BASE_ID, metric: "temperature" }), "negative control");
 	});
 });

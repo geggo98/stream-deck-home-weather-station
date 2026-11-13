@@ -20,7 +20,7 @@ import {
 	joinUrl,
 	parseRetryAfter,
 } from "./http.ts";
-import { MAX_FIELD_LENGTH } from "./credentials.ts";
+import { isCleanToken } from "./credentials.ts";
 
 export const SCOPE = "read_station";
 /** Pause after a usage-limit answer (403 code 26); same value as the data endpoint uses. */
@@ -51,14 +51,10 @@ export function apiErrorCode(json: unknown): string | undefined {
 	return typeof code === "string" && /^-?\d{1,4}$/.test(code) ? code : undefined;
 }
 
-function isToken(value: unknown): value is string {
-	return typeof value === "string" && value.length > 0 && value.length <= MAX_FIELD_LENGTH && !/[\s\u0000-\u001f\u007f]/.test(value);
-}
-
 export function parseTokenGrant(json: unknown): TokenGrant | undefined {
 	if (typeof json !== "object" || json === null) return undefined;
 	const r = json as Record<string, unknown>;
-	if (!isToken(r.access_token) || !isToken(r.refresh_token)) return undefined;
+	if (!isCleanToken(r.access_token) || !isCleanToken(r.refresh_token)) return undefined;
 	const expires = r.expires_in;
 	if (typeof expires !== "number" || !Number.isFinite(expires) || expires <= 0) return undefined;
 	return {

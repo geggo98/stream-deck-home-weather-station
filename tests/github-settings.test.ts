@@ -59,6 +59,8 @@ describe("github settings plan", () => {
 			assert.equal(byName[name]?.enforcement, "active", name);
 			assert.deepEqual(byName[name].bypass_actors, [], name);
 		}
+		const branchRules = byName["protect-default-branch"].rules.map((r: any) => r.type).sort();
+		assert.deepEqual(branchRules, ["deletion", "non_fast_forward"]);
 		const tagRules = byName["protect-release-tags"].rules.map((r: any) => r.type).sort();
 		assert.deepEqual(tagRules, ["deletion", "non_fast_forward", "update"]);
 	});

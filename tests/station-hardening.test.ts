@@ -16,8 +16,8 @@ import { NetatmoClient } from "../src/adapter/station/client.ts";
 import { NetatmoError } from "../src/adapter/station/errors.ts";
 import { USAGE_LIMIT_PAUSE_MS } from "../src/adapter/station/oauth.ts";
 import { Poller } from "../src/adapter/station/poller.ts";
-import { redactSecrets } from "../src/adapter/station/redact.ts";
-import { TokenManager, UNPERSISTED_ROTATION_MESSAGE } from "../src/adapter/station/token-manager.ts";
+import { SecretRegistry, redactSecrets } from "../src/adapter/station/redact.ts";
+import { TokenManager } from "../src/adapter/station/token-manager.ts";
 import {
 	FakeClock,
 	type Handler,
@@ -153,7 +153,7 @@ describe("F1: a refresh in flight when credentials are cleared or replaced is di
 // security F2: a rotated pair that could not be written is surfaced, not just logged
 // ---------------------------------------------------------------------------------------
 
-describe("F2: unpersisted rotation becomes a visible error state", () => {
+describe("F2: unpersisted rotation becomes a warning on the ok state", () => {
 	class FlakyStore implements CredentialStore {
 		failSaves = true;
 		value: StoredCredentials | undefined = seed;
@@ -170,7 +170,7 @@ describe("F2: unpersisted rotation becomes a visible error state", () => {
 	}
 
 	// Without the `warning` option (or without create-service wiring it to hasUnpersistedRotation) the state stays "ok".
-	it("poll succeeds with data, state is `error` with the documented message, and returns to `ok` once the write works", async (t) => {
+	it("poll succeeds with data, state is ok WITH the warning (never `error`), and loses the warning once the write works", async (t) => {
 		const api = await startApiDouble(t);
 		api.route(TOKEN, tokenIssuer());
 		api.route(STATIONS, stationsOk());
@@ -182,7 +182,7 @@ describe("F2: unpersisted rotation becomes a visible error state", () => {
 		const poller = new Poller({
 			fetchSnapshot: () => client.fetchSnapshot(),
 			hasCredentials: () => tokens.hasCredentials(),
-			warning: () => (tokens.hasUnpersistedRotation ? UNPERSISTED_ROTATION_MESSAGE : undefined),
+			warning: () => (tokens.hasUnpersistedRotation ? "unpersisted-rotation" : undefined),
 			now: clock.now,
 			random: () => 0.5,
 			timers: clock.timersApi,
@@ -192,15 +192,18 @@ describe("F2: unpersisted rotation becomes a visible error state", () => {
 		t.after(() => sub.unsubscribe());
 		await until(() => poller.getSnapshot() !== undefined, "first snapshot");
 		const state = poller.getConnectionState();
-		assert.equal(state.kind, "error");
-		assert.ok(state.kind === "error" && state.message === UNPERSISTED_ROTATION_MESSAGE);
+		assert.deepEqual(state, { kind: "ok", warning: "unpersisted-rotation" });
 		assert.equal(tokens.hasUnpersistedRotation, true);
 		assert.match(logger.text(), /could not persist credentials/);
 		assert.ok(!logger.text().includes("fake-refresh-1"), "never a token value in the log line");
 
 		store.failSaves = false;
 		await clock.advance(301_000); // one poll interval (jitter fixed at 0)
-		await until(() => poller.getConnectionState().kind === "ok", "state back to ok");
+		await until(() => {
+			const s = poller.getConnectionState();
+			return s.kind === "ok" && s.warning === undefined;
+		}, "warning gone");
+		assert.deepEqual(poller.getConnectionState(), { kind: "ok" });
 		assert.equal(tokens.hasUnpersistedRotation, false);
 		assert.equal(store.value?.refreshToken, "fake-refresh-1", "the retry wrote the rotated pair");
 		poller.dispose();
@@ -209,7 +212,7 @@ describe("F2: unpersisted rotation becomes a visible error state", () => {
 
 describe("F2: the service wires the warning (read-only data directory)", { skip: process.platform === "win32" || process.getuid?.() === 0 }, () => {
 	// Without the `warning` wiring in create-service.ts the state stays "ok" and the user is told nothing.
-	it("a refresh whose result cannot be written shows the error state while data keeps flowing", async (t) => {
+	it("a refresh whose result cannot be written shows the warning while data keeps flowing", async (t) => {
 		const api = await startApiDouble(t);
 		const dataDir = await makeTempDir(t);
 		await new FileCredentialStore({ dataDir, logger: new RecordingLogger() }).save(seed);
@@ -221,7 +224,7 @@ describe("F2: the service wires the warning (read-only data directory)", { skip:
 			const sub = service.subscribe(() => undefined);
 			await until(() => service.getSnapshot() !== undefined, "snapshot");
 			const state = service.getConnectionState();
-			assert.ok(state.kind === "error" && state.message === UNPERSISTED_ROTATION_MESSAGE, JSON.stringify(state));
+			assert.deepEqual(state, { kind: "ok", warning: "unpersisted-rotation" });
 			sub.unsubscribe();
 		} finally {
 			service.dispose();
@@ -330,17 +333,18 @@ describe("F5: TrackingStore feeds every credential value to the redactor", () =>
 
 	// Removing `this.secrets.add(c.refreshToken)` or the accessToken line fails the matching assertion.
 	it("save() tracks client secret, refresh token and access token", async () => {
-		const secrets = new Set<string>();
+		const secrets = new SecretRegistry();
 		await new TrackingStore(new MemoryCredentialStore(), secrets).save(creds);
 		const line = `leak ${creds.clientSecret} ${creds.refreshToken} ${creds.accessToken}`;
-		const masked = redactSecrets(line, [...secrets]);
+		const masked = redactSecrets(line, secrets.values());
 		for (const v of [creds.clientSecret, creds.refreshToken, creds.accessToken as string]) assert.ok(!masked.includes(v), v);
 	});
 
 	it("load() tracks them too (credentials written by an earlier session)", async () => {
-		const secrets = new Set<string>();
+		const secrets = new SecretRegistry();
 		await new TrackingStore(new MemoryCredentialStore(creds), secrets).load();
-		assert.ok(secrets.has(creds.refreshToken) && secrets.has(creds.accessToken as string) && secrets.has(creds.clientSecret));
+		const known = secrets.values();
+		assert.ok(known.includes(creds.refreshToken) && known.includes(creds.accessToken as string) && known.includes(creds.clientSecret));
 	});
 
 	it("TrackingStore serialises save and clear in call order: a slow save cannot land after a later clear", async () => {
@@ -353,7 +357,7 @@ describe("F5: TrackingStore feeds every credential value to the redactor", () =>
 			},
 			clear: async () => void events.push("cleared"),
 		};
-		const store = new TrackingStore(slow, new Set());
+		const store = new TrackingStore(slow, new SecretRegistry());
 		const a = store.save(creds);
 		const b = store.clear();
 		await Promise.all([a, b]);

@@ -14,14 +14,22 @@
 
 import type { Classification } from "./status.ts";
 
-/** Words shown instead of a value; one per status in the display table. */
+/**
+ * Longest LINE of a status text on a key: a key title is about 8 to 10 characters wide, and
+ * longer text is cut or wrapped mid-word by Stream Deck. A status that needs more says it on
+ * two lines (explicit "\n"); tests/render-status-faces.test.ts checks every status text
+ * (this table, the history table and the navigation keys) against this limit.
+ */
+export const MAX_STATUS_LINE_CHARS = 10;
+
+/** Words shown instead of a value; one per status in the display table. Every line is at most MAX_STATUS_LINE_CHARS long. */
 export const STATUS_WORDS = {
 	"unreachable": "No signal",
 	"auth-error": "Sign in",
 	"no-credentials": "Set up",
 	"loading": "…",
 	"offline": "Offline",
-	"no-module": "Pick module",
+	"no-module": "Pick\nmodule",
 	"no-data": "No data",
 	"no-service": "Offline",
 } as const;
@@ -49,7 +57,7 @@ export const MAX_DIAL_LABEL_CHARS = 20;
  */
 export function cleanLabel(text: string | undefined, max = MAX_LABEL_CHARS): string {
 	if (typeof text !== "string") return "";
-	const spaced = text.replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g, " ");
+	const spaced = text.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/g, " ");
 	const collapsed = spaced.replace(/\s+/g, " ").trim();
 	const chars = Array.from(collapsed);
 	return chars.length <= max ? collapsed : `${chars.slice(0, max - 1).join("")}…`;

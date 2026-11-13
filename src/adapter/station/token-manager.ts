@@ -8,15 +8,16 @@
  *  2. the new pair is persisted BEFORE the new access token is returned to anyone;
  *  3. a rejected refresh token is remembered (sticky) and never sent again: no retry loop
  *     that would hammer the service with a dead token. It is forgotten only by `reset()`
- *     (credentials changed) or when the stored refresh token differs;
+ *     (credentials changed); the refresh token is compared as a second guard, and a rejection
+ *     that arrives after a `reset()` is not recorded at all;
  *  4. refresh happens `refreshMarginMs` (60 s) before expiry.
  *
  * If persisting fails (two attempts) after the service already rotated the token, the new
  * access token IS returned and used, and the rotated pair is kept in MEMORY ONLY (the old
  * one is dead anyway). What happens then, exactly:
  *   - each failed attempt is logged at error level (error code only, never a value);
- *   - `hasUnpersistedRotation` turns true; the poller turns it into a visible `error`
- *     ConnectionState (`UNPERSISTED_ROTATION_MESSAGE`) while data keeps flowing;
+ *   - `hasUnpersistedRotation` turns true; the poller turns it into `{kind: "ok", warning:
+ *     "unpersisted-rotation"}` (the human text is `UNPERSISTED_ROTATION_MESSAGE`) while data keeps flowing;
  *   - the write is retried at the start of every `getAccessToken()` (that is, every poll);
  *     on success the flag and the message disappear;
  *   - if the plugin restarts before a write succeeded, the disk still holds the DEAD old
@@ -41,7 +42,7 @@ import { requestToken } from "./oauth.ts";
 export const DEFAULT_BASE_URL = "https://api.netatmo.com";
 export const REFRESH_MARGIN_MS = 60_000;
 
-/** Shown (as an `error` connection state) while a rotated token pair exists only in memory. */
+/** Human text for the connection state's `warning: "unpersisted-rotation"`: shown while a rotated token pair exists only in memory. */
 export const UNPERSISTED_ROTATION_MESSAGE =
 	"The renewed sign-in could not be saved to disk. Data is current, but after a restart you will have to sign in again.";
 
@@ -77,8 +78,7 @@ export class TokenManager implements TokenProvider {
 	private generation = 0;
 	private rejectedRefreshToken: string | undefined;
 	private rejectedError: NetatmoError | undefined;
-	/** Number of refresh requests sent; exposed for tests and diagnostics. */
-	refreshRequests = 0;
+	private refreshCount = 0;
 
 	constructor(options: TokenManagerOptions) {
 		this.store = options.store;
@@ -89,6 +89,23 @@ export class TokenManager implements TokenProvider {
 		this.log = options.logger ?? scopedLogger("netatmo.tokens");
 		this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 		this.marginMs = options.refreshMarginMs ?? REFRESH_MARGIN_MS;
+	}
+
+	/** Number of refresh requests sent; read-only, for tests and diagnostics. */
+	get refreshRequests(): number {
+		return this.refreshCount;
+	}
+
+	/**
+	 * Take over a credential pair that is valid at the service but could not be written (the
+	 * caller's save failed): it becomes the live pair, flagged as unpersisted, so the write is
+	 * retried on every `getAccessToken()` like after a failed refresh. Starts a new generation
+	 * first, so nothing from the old credentials survives.
+	 */
+	adoptUnpersisted(credentials: StoredCredentials): void {
+		this.reset();
+		this.creds = credentials;
+		this.unpersisted = true;
 	}
 
 	/** Forget cached credentials and any remembered rejection (call when the store changed). */
@@ -178,7 +195,7 @@ export class TokenManager implements TokenProvider {
 			// sticky: do not send a token the service already rejected
 			throw this.rejectedError;
 		}
-		this.refreshRequests++;
+		this.refreshCount++;
 		let grant;
 		try {
 			grant = await requestToken(

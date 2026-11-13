@@ -13,7 +13,7 @@
  * Make an untrusted string safe to put in a log line.
  *
  * API responses, module names and error bodies are untrusted: they could carry control
- * characters (including ANSI escapes) or arbitrary volume into a file a maintainer
+ * characters (C0 and C1, including ANSI escapes) or arbitrary volume into a file a maintainer
  * later opens in a terminal. Escape control characters and cap the length.
  *
  * @param value - Untrusted text.
@@ -25,7 +25,8 @@ export function truncateForLog(value: string, maxLength = 120): string {
 		if (out.length >= maxLength) return `${out}… (${value.length} chars total)`;
 		const code = ch.codePointAt(0)!;
 		// Escape rather than drop, so the log still shows that something was there.
-		out += code < 0x20 || code === 0x7f ? `\\x${code.toString(16).padStart(2, "0")}` : ch;
+		// 0x80-0x9f are the C1 controls: U+009B is CSI, a one-character ANSI escape introducer
+		out += code < 0x20 || (code >= 0x7f && code <= 0x9f) ? `\\x${code.toString(16).padStart(2, "0")}` : ch;
 	}
 	return out;
 }

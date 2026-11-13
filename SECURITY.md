@@ -15,7 +15,8 @@ Please report privately, not in a public issue:
 - write to the maintainer address in `package.json` (`author`).
 
 Do not include live tokens or client secrets in a report. If you leaked your own, revoke
-them first (delete or regenerate the app's secret in the Netatmo developer portal). This is a
+them first (delete the app in the Netatmo developer portal; regenerating its secret is the
+usual way to revoke it, but whether that also invalidates issued tokens is **[unverified]**). This is a
 hobby project: expect a reply within a couple of weeks, not hours. No bounty.
 
 ## Supported versions
@@ -28,8 +29,8 @@ changelog says so when it happens.
 | Data | Where | Who can read it | Protection |
 |---|---|---|---|
 | Client id, client secret, access token, refresh token | `credentials.json` in the per-user data directory (paths in [docs/SETUP.md](docs/SETUP.md)) | Every process running as your OS user, backups of that directory, administrators | File mode `0600` on macOS/Linux, atomic write (temp file + rename). **Not encrypted.** On Windows the mode is ignored and the profile's access control list applies **[unverified]**: the suite has not been run on Windows |
-| Choice of module, metric, units, labels, poll interval, alert thresholds, the navigation focus (station and module ids, which are MAC addresses) | Stream Deck settings (plain JSON in your Stream Deck profile) | Same as above, plus anything that exports or syncs Stream Deck profiles **[unverified]** | None. **Contains no secrets by design.** |
-| Latest station snapshot and history curves | Memory only | The plugin process | Memory only; the plugin writes no file other than `credentials.json` |
+| Choice of module, metric, units, labels, poll interval, alert thresholds, the navigation focus (`moduleKey`, station and module ids, which are MAC addresses) | Stream Deck settings (plain JSON in your Stream Deck profile) | Same as above, plus anything that exports or syncs Stream Deck profiles **[unverified]** | None. **Contains no secrets by design.** |
+| Latest station snapshot and history curves | Memory only | The plugin process | Memory only; the plugin writes no data file other than `credentials.json` (the Stream Deck SDK writes the log files) |
 | Logs | The plugin's `logs` folder | Same as above | No tokens, secrets, Authorization headers, query strings or raw API bodies; module ids not at INFO (guarded by a test, see below) |
 
 Honest limits:
@@ -37,7 +38,15 @@ Honest limits:
 - **Stream Deck settings are plaintext** and the Stream Deck SDK dumps them into the log at
   TRACE level. That is why credentials do not go there. If you ever set the plugin's
   debug mode (`npm run watch`), the SDK flips to TRACE logging and opens a Node inspector
-  port; never attach such logs to an issue and never ship a build with debug enabled.
+  port; debug mode makes TRACE reachable, it does not force it (the level comes from the environment variable
+  `HOME_WEATHER_LOG_LEVEL`, default `info`). Never attach such logs to an issue and never ship a build with debug enabled.
+  At TRACE the SDK logs every frame, **including the message that carries your client id and
+  secret** (`setCredentials` or `startBrowserLogin`); the plugin's redaction covers only the
+  adapter's own loggers, not the SDK's frame dump.
+- The plugin-level error handlers (uncaught exception, unhandled rejection, the router's
+  failure paths) log through the SDK logger and may include a raw stack trace, which the
+  redaction does not see. They do not put tokens into the message on purpose, but that is
+  not proven for every possible error text.
   Releases must not contain `Nodejs.Debug` in the manifest (checked by the build tooling and a
   pre-commit hook).
 - The credentials file is as safe as your user account. Malware running as you can read it
@@ -45,7 +54,10 @@ Honest limits:
   machine.
 - The refresh token grants read access to your station data (scope `read_station`), not
   control of devices and not access to cameras or thermostats. The client secret
-  belongs to an app that only you own; revoke by regenerating it in the developer portal.
+  belongs to an app that only you own. **"Clear" in the Property Inspector only deletes the
+  local file; it does not revoke the tokens at Netatmo.** Revoking by regenerating the app's
+  secret or deleting the app in the developer portal is **[unverified]**: nobody has tried
+  whether issued tokens then stop working.
 - Netatmo may change the API, the token lifetimes or the portal at any time.
 
 ## Threat model
@@ -60,14 +72,14 @@ Honest limits:
 | Malicious or oversized API response | Response size cap (2 MiB) and explicit shape validation in the client | A compromised Netatmo endpoint or TLS interception with a trusted CA |
 | Supply chain (npm, GitHub Actions) | Actions pinned to full commit SHAs and checked in CI, Dependabot with a 14-day cooldown, lockfile, `osv-scanner` in CI and pre-push, lockfile-only installs (`npm ci`); two advisories are accepted for a limited time, see "Known advisories" below | New dependencies are trusted at install time; tests do not prove their behaviour |
 | Another client invalidates the token | Documented (docs/SETUP.md); auth errors stop polling instead of retry loops | See failure mode below |
-| Local webhook or listener abuse | The plugin never registers webhooks. The experimental browser sign-in opens a loopback listener for at most three minutes and only for one callback | Another local process could race the callback on the loopback port; the code exchange needs the client secret, and the callback is only accepted with the exact random `state` value (constant-time comparison) |
+| Local webhook or listener abuse | The plugin never registers webhooks. The experimental browser sign-in opens a loopback listener for at most three minutes and only for one callback | The port is fixed (53682) and the plugin listens on `127.0.0.1` only, while the redirect URI says `localhost`. A local process that binds the port first, or listens on `[::1]` where the browser resolves `localhost` to IPv6, can receive the authorization code; it cannot exchange it without the client secret, and the plugin only accepts a callback with the exact random `state` value (constant-time comparison) |
 
 ### Property Inspector: CSP and vendoring
 
 The Property Inspector is a small web page opened by the Stream Deck app. It loads its UI
 library from the plugin folder and runs only scripts that ship in the plugin. The shipped
 pages (every file in `ui/*.html`: `measurement.html`, `dial.html`, `focus.html`,
-`history.html`, `auto-rotate.html`, `info.html`; `tests/repo-hygiene.test.ts` compares this list with the
+`history.html`, `auto-rotate.html`, `info.html`, `navigation.html`; `tests/repo-hygiene.test.ts` compares this list with the
 directory) carry this policy as a `<meta>` tag:
 `default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
 font-src 'self'; connect-src ws://127.0.0.1:* ws://localhost:*; base-uri 'none'; form-action 'none'`.
@@ -79,8 +91,10 @@ contacts a third-party server and never executes code that changed after review.
 is manual updates: see `de.schwetschke.sd.home-weather-station.sdPlugin/ui/vendor/VENDORED.md`
 for versions and the update procedure.
 
-Secrets cross the Property Inspector exactly once, from the form to the plugin process
-(`setCredentials`); nothing secret is ever sent back to it.
+Secrets cross the Property Inspector from the form to the plugin process in two messages,
+`setCredentials` (client id, secret, refresh token) and `startBrowserLogin` (client id and
+secret); nothing secret is ever sent back to it, and the form clears the secret fields after
+each press.
 
 ### Known advisories (osv-scanner)
 
@@ -118,11 +132,12 @@ What happens when the write fails is deliberate and not a silent success (implem
 1. The write is attempted twice; each failure is logged at error level (error code only).
 2. The plugin keeps the new pair in memory (the old token is already dead, so discarding it
    would break the running session for nothing) and carries on with current data.
-3. It publishes an `error` connection state with the message "The renewed sign-in could not
-   be saved to disk. Data is current, but after a restart you will have to sign in again.".
-   The plugin shows it only in the account status of the Property Inspector. The keys keep
-   showing the last good data and look normal, so **the deck itself gives no signal**: a user
-   who never opens the Property Inspector will not see the warning before the restart.
+3. It publishes an `ok` connection state with the warning `unpersisted-rotation` and the
+   message "The renewed sign-in could not be saved to disk. Data is current, but after a
+   restart you will have to sign in again.". The plugin shows it in the account status of the
+   Property Inspector and as a warning marker on the keys (a warning-coloured dot on the key
+   tile; on the dial a "!" and a warning-coloured indicator bar). The values stay at full opacity;
+   when data is also stale, the stale look wins.
 4. The write is retried on every poll; on success the message disappears.
 5. If the plugin or the machine restarts before a write has succeeded, the disk still holds
    the dead token and the next start shows `Sign in`; the recovery is a new authorisation.
@@ -134,9 +149,13 @@ Pinned and approved workflow actions, a read-only default token, secret scanning
 protection, osv-scanner and zizmor in CI plus a weekly scan, dependency review on pull requests,
 and protected release tags are described in [docs/PUBLISHING.md](docs/PUBLISHING.md) (section
 "Repository settings (as code)") and enforced by `scripts/github-settings.py`. Release assets
-are built by CI from the tagged commit; verify a download against the release page, not a
-chat message. The release files carry no signature or provenance attestation yet
-(**not implemented**).
+are built by CI from the tagged commit in two jobs: the build runs `npm ci --ignore-scripts`
+with a read-only token and no write permission, a second job without checkout and without npm
+holds the write token, attests the file (GitHub build-provenance attestation, signed through
+the workflow's OIDC identity) and attaches it. The release carries no checksum file and no
+separate signature. Verify a download with `gh attestation verify <file> --repo <owner>/<repo>`
+(**[unverified]**: no release exists yet, so the attestation step has never run). Download
+only from the release page of this repository, never from a link in a chat message.
 
 ## What this plugin does not do
 
@@ -144,6 +163,8 @@ chat message. The release files carry no signature or provenance attestation yet
   The only network peer is the Netatmo API host.
 - It does not ask for your Netatmo username or password and never stores them.
 - It does not use write scopes or webhooks.
+- Credentials that cannot be read (wrong permissions, damaged file) are reported with the data
+  directory; the plugin does not guess, delete or overwrite them.
 
 ## For contributors
 

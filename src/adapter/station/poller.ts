@@ -1,5 +1,7 @@
 /**
- * The only component that causes network traffic. Implements WeatherSource (types.ts).
+ * Schedules the periodic getstationsdata requests. Implements WeatherSource (types.ts).
+ * (The history service, credential validation in the service and the browser sign-in call
+ * the API too; this class owns the poll schedule, the snapshot and the connection state.)
  *
  * Rules (docs/ARCHITECTURE.md, "Data flow"):
  *  - starts with the first subscriber, stops after the last;
@@ -20,7 +22,7 @@
  */
 
 import { type AdapterLogger, scopedLogger } from "../logging.ts";
-import { type NetatmoError, toNetatmoError } from "./errors.ts";
+import { type NetatmoError, describeUnexpected, toNetatmoError } from "./errors.ts";
 import type { ConnectionState, PollerSubscription, StationSnapshot, WeatherSource } from "./types.ts";
 
 export const DEFAULT_INTERVAL_SECONDS = 300;
@@ -51,12 +53,12 @@ export interface PollerOptions {
 	readonly fetchSnapshot: () => Promise<StationSnapshot>;
 	readonly hasCredentials: () => Promise<boolean>;
 	/**
-	 * A message while the data is fine but something the user must know about is not (a
+	 * A warning while the data is fine but something the user must know about is not (a
 	 * rotated token pair that could not be written to disk). Checked after every successful
-	 * poll; a message turns the state into `error` (no backoff, polling continues on schedule),
-	 * `undefined` returns it to `ok`.
+	 * poll; a value makes the state `{kind: "ok", warning}` (data stays current, no backoff,
+	 * polling continues on schedule), `undefined` clears it.
 	 */
-	readonly warning?: () => string | undefined;
+	readonly warning?: () => "unpersisted-rotation" | undefined;
 	readonly intervalSeconds?: number;
 	readonly now?: () => number;
 	/** 0..1 */
@@ -78,6 +80,7 @@ function sameState(a: ConnectionState, b: ConnectionState): boolean {
 	if (a.kind !== b.kind) return false;
 	if (a.kind === "error" && b.kind === "error") return a.message === b.message && a.since === b.since && a.retryAt === b.retryAt;
 	if (a.kind === "auth-error" && b.kind === "auth-error") return a.message === b.message && a.since === b.since;
+	if (a.kind === "ok" && b.kind === "ok") return a.warning === b.warning;
 	return true;
 }
 
@@ -169,7 +172,7 @@ export class Poller implements WeatherSource {
 		this.resetForNewAccount();
 		this.snapshot = snapshot;
 		this.lastRequestAt = this.now();
-		this.state = { kind: "ok" };
+		this.state = this.okState();
 		this.notify();
 		if (this.listeners.size > 0) this.schedule(this.jittered(this.intervalMs));
 	}
@@ -239,8 +242,8 @@ export class Poller implements WeatherSource {
 		let has = false;
 		try {
 			has = await this.opts.hasCredentials();
-		} catch {
-			this.log.warn("could not check credentials");
+		} catch (error) {
+			this.log.error(`could not check credentials: ${describeUnexpected(error)}`);
 		}
 		if (epoch !== this.epoch || this.listeners.size === 0 || this.disposed) return;
 		if (!has) {
@@ -284,7 +287,7 @@ export class Poller implements WeatherSource {
 			snapshot = await this.opts.fetchSnapshot();
 		} catch (error) {
 			if (epoch !== this.epoch) return;
-			this.onFailure(toNetatmoError(error));
+			this.onFailure(toNetatmoError(error, this.log));
 			this.afterPoll(epoch);
 			return;
 		}
@@ -293,21 +296,20 @@ export class Poller implements WeatherSource {
 		this.blockedUntil = 0;
 		this.pendingDelayMs = undefined;
 		this.snapshot = snapshot;
-		const warning = this.opts.warning?.();
-		if (warning === undefined) {
-			this.state = { kind: "ok" };
-		} else {
-			const since = this.state.kind === "error" && this.state.message === warning ? this.state.since : this.now();
-			this.state = { kind: "error", message: warning, since, retryAt: this.now() + this.intervalMs };
-		}
+		this.state = this.okState();
 		this.notify();
 		this.afterPoll(epoch);
+	}
+
+	private okState(): ConnectionState {
+		const warning = this.opts.warning?.();
+		return warning === undefined ? { kind: "ok" } : { kind: "ok", warning };
 	}
 
 	private onFailure(error: NetatmoError): void {
 		const now = this.now();
 		if (error.kind === "auth") {
-			this.log.warn(`polling stopped: ${error.message}`);
+			this.log.warn(`polling stopped (auth${error.status !== undefined ? ` HTTP ${error.status}` : ""}${error.code !== undefined ? ` code ${error.code}` : ""}): ${error.message}`);
 			const since = this.state.kind === "auth-error" ? this.state.since : now;
 			this.setState({ kind: "auth-error", message: error.message, since });
 			return;
@@ -320,7 +322,7 @@ export class Poller implements WeatherSource {
 		// jitter first, then make sure neither the cap nor Retry-After is violated
 		const delay = Math.min(Math.max(this.jittered(backoff), retryAfterMs), MAX_BACKOFF_MS);
 		this.pendingDelayMs = delay;
-		this.log.warn(`poll failed (${error.kind}); attempt ${this.errorCount}, next in ${Math.round(delay / 1000)} s`);
+		this.log.warn(`poll failed (${error.kind}${error.status !== undefined ? ` HTTP ${error.status}` : ""}${error.code !== undefined ? ` code ${error.code}` : ""}); attempt ${this.errorCount}, next in ${Math.round(delay / 1000)} s`);
 		this.setState({ kind: "error", message: error.message, since: this.errorSince, retryAt: now + delay });
 	}
 
@@ -343,8 +345,8 @@ export class Poller implements WeatherSource {
 		for (const listener of [...this.listeners]) {
 			try {
 				listener.callback();
-			} catch {
-				this.log.warn("a listener threw; ignored");
+			} catch (error) {
+				this.log.error(`a listener threw; ignored: ${describeUnexpected(error)}`);
 			}
 		}
 	}

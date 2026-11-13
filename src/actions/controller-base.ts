@@ -18,18 +18,18 @@ import type { AdapterLogger } from "../adapter/logging.ts";
 import type { HistoryRequest, HistoryResult, WeatherSource } from "../adapter/station/types.ts";
 import type { FocusStore } from "../focus/focus-store.ts";
 import type { ActionSettings } from "../focus/settings.ts";
-import type { GlobalSettings, MeasurementSettings } from "../pi-protocol.ts";
+import type { GlobalSettings } from "../pi-protocol.ts";
 import { adoptionCandidate } from "../render/select.ts";
 import type { DisplayMetricId } from "../render/metrics.ts";
 import { BindCoordinator } from "./bind-coordinator.ts";
 import { fireAndLog } from "./fire-and-log.ts";
-import { forgetActionSettings, rememberActionDefaultMetric, rememberActionSettings } from "./global-settings.ts";
+import { forgetActionSettings, rememberActionDefaultMetric, rememberActionSettings, rememberHistoryAction } from "./global-settings.ts";
 import { RepaintClock } from "./repaint-clock.ts";
 
 export interface BaseSurface {
 	readonly id: string;
 	/** Persist this action's own settings (used for first-use adoption). */
-	setSettings(settings: MeasurementSettings): Promise<void>;
+	setSettings(settings: ActionSettings): Promise<void>;
 }
 
 export interface ControllerEnv {
@@ -79,7 +79,8 @@ export function settingsSignature(settings: ActionSettings): string {
 	]);
 }
 
-export abstract class ControllerBase<S extends BaseSurface, E extends BaseEntry<S>> {
+/** `X` is what the SDK class passes to `appear` beside the settings (a preset metric, a key kind); `undefined` when there is none. */
+export abstract class ControllerBase<S extends BaseSurface, E extends BaseEntry<S>, X = undefined> {
 	protected readonly entries = new Map<string, E>();
 	protected readonly binds: BindCoordinator;
 	private readonly offGlobal: () => void;
@@ -98,7 +99,7 @@ export abstract class ControllerBase<S extends BaseSurface, E extends BaseEntry<
 	}
 
 	/** Build the per-action record. */
-	protected abstract createEntry(surface: S, settings: ActionSettings, extra: unknown): E;
+	protected abstract createEntry(surface: S, settings: ActionSettings, extra: X | undefined): E;
 	/** Compute the view from the source's cache and write what changed. Must not throw for bad data. */
 	protected abstract paint(entry: E): void;
 	/** Drop the "already painted" memory so the next paint writes unconditionally. */
@@ -111,6 +112,10 @@ export abstract class ControllerBase<S extends BaseSurface, E extends BaseEntry<
 	protected presetMetric(_entry: E): DisplayMetricId | undefined {
 		return undefined;
 	}
+	/** True for the action whose metric dropdown may only offer measurements that have a history. */
+	protected offersHistoryMetricsOnly(_entry: E): boolean {
+		return false;
+	}
 	/** True for an action whose module and metric come from the focus: it never adopts a module of its own. */
 	protected followsFocus(_entry: E): boolean {
 		return false;
@@ -119,7 +124,7 @@ export abstract class ControllerBase<S extends BaseSurface, E extends BaseEntry<
 	protected afterBind(_entry: E): void {}
 
 	/** The action appeared (or the profile switched back to it): bind immediately. */
-	appear(surface: S, settings: ActionSettings, extra?: unknown): Promise<void> {
+	appear(surface: S, settings: ActionSettings, extra?: X): Promise<void> {
 		const existing = this.entries.get(surface.id);
 		if (!existing && this.entries.size >= MAX_CONTROLLED_ACTIONS) {
 			this.env.logger.warn(`too many actions (${this.entries.size}); ignoring one`);
@@ -132,6 +137,7 @@ export abstract class ControllerBase<S extends BaseSurface, E extends BaseEntry<
 		rememberActionSettings(surface.id, settings);
 		const preset = this.presetMetric(entry);
 		if (preset) rememberActionDefaultMetric(surface.id, preset);
+		if (this.offersHistoryMetricsOnly(entry)) rememberHistoryAction(surface.id);
 		return this.bind(entry);
 	}
 

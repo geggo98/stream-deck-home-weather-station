@@ -57,7 +57,7 @@ jobs:
       - name: Typecheck, build, test, validate, pack (through devenv)
         run: |
           devenv shell -- bash -ceuo pipefail '
-            npm ci
+            npm ci --ignore-scripts
             npm run typecheck
             npm run build
             npm test

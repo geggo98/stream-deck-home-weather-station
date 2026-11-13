@@ -6,7 +6,10 @@ import {
 	CREDENTIALS_FILE_NAME,
 	FileCredentialStore,
 	MAX_CREDENTIALS_FILE_BYTES,
+	MAX_FIELD_LENGTH,
 	type StoredCredentials,
+	parseCredentialInput,
+	parseLoginInput,
 	validateCredentials,
 } from "../src/adapter/station/credentials.ts";
 import { RecordingLogger, makeTempDir } from "./station-helpers.ts";
@@ -98,7 +101,8 @@ describe("FileCredentialStore", () => {
 			["wrong type", JSON.stringify({ version: 1, ...creds, refreshToken: 12345 })],
 			["array", "[]"],
 			["whitespace in token", JSON.stringify({ version: 1, ...creds, refreshToken: "has space" })],
-			["oversized", "x".repeat(MAX_CREDENTIALS_FILE_BYTES + 1)],
+			// valid JSON with valid credentials, padded past the limit: only the SIZE check can reject it
+			["oversized", JSON.stringify({ version: 1, ...creds, pad: "x".repeat(MAX_CREDENTIALS_FILE_BYTES) })],
 		];
 		for (const [name, content] of cases) {
 			await fs.writeFile(store.filePath, content);
@@ -137,5 +141,70 @@ describe("validateCredentials", () => {
 	});
 	it("rejects control characters", () => {
 		assert.equal(validateCredentials({ ...creds, clientId: "a\nb" }), undefined);
+	});
+});
+
+describe("FileCredentialStore.probe tells a damaged file from a missing one", () => {
+	it("missing = no problem; invalid content and oversize = invalid; a good file = credentials", async (t) => {
+		const dir = await makeTempDir(t);
+		const store = new FileCredentialStore({ dataDir: dir, logger: new RecordingLogger() });
+		assert.deepEqual(await store.probe(), {});
+		await fs.writeFile(store.filePath, "{not json");
+		assert.deepEqual(await store.probe(), { problem: "invalid" });
+		await fs.writeFile(store.filePath, JSON.stringify({ version: 1, ...creds, pad: "x".repeat(MAX_CREDENTIALS_FILE_BYTES) }));
+		assert.deepEqual(await store.probe(), { problem: "invalid" });
+		await fs.writeFile(store.filePath, JSON.stringify({ version: 2, ...creds }));
+		assert.deepEqual(await store.probe(), { problem: "invalid" });
+		await store.save(creds);
+		assert.deepEqual((await store.probe()).credentials, creds);
+	});
+
+	it("an unreadable file (permissions) is `unreadable`, not `not configured`", { skip: process.platform === "win32" || process.getuid?.() === 0 }, async (t) => {
+		const dir = await makeTempDir(t);
+		const logger = new RecordingLogger();
+		const store = new FileCredentialStore({ dataDir: dir, logger });
+		await store.save(creds);
+		await fs.chmod(store.filePath, 0o000);
+		try {
+			assert.deepEqual(await store.probe(), { problem: "unreadable" });
+			assert.equal(await store.load(), undefined, "load keeps its old contract");
+			assert.match(logger.text(), /unreadable \(EACCES\)/);
+		} finally {
+			await fs.chmod(store.filePath, 0o600);
+		}
+	});
+});
+
+describe("parseCredentialInput: the one validation of what the PI sends", () => {
+	const good = { clientId: "  client-id-0001 ", clientSecret: "client-secret-0001\n", refreshToken: "\trefresh-0001" };
+
+	it("trims and returns the three values", () => {
+		assert.deepEqual(parseCredentialInput(good), { ok: true, value: { clientId: "client-id-0001", clientSecret: "client-secret-0001", refreshToken: "refresh-0001" } });
+	});
+
+	it("names the first missing field, and tells `too long` from `required`", () => {
+		const bad = (patch: Record<string, unknown>) => {
+			const r = parseCredentialInput({ ...good, ...patch });
+			assert.equal(r.ok, false);
+			return r.ok ? "" : r.error;
+		};
+		assert.equal(bad({ clientId: "   " }), "The client ID is required.");
+		assert.equal(bad({ clientSecret: undefined }), "The client secret is required.");
+		assert.equal(bad({ refreshToken: 42 }), "The refresh token is required.");
+		assert.match(bad({ refreshToken: "x".repeat(MAX_FIELD_LENGTH + 1) }), /refresh token is too long \(at most 512 characters\)/);
+		assert.equal(parseCredentialInput({ ...good, refreshToken: "x".repeat(MAX_FIELD_LENGTH) }).ok, true, "exactly the limit is fine");
+		assert.match(bad({ clientId: "client id" }), /client ID contains spaces/);
+		assert.match(bad({ clientSecret: "abc\u0007def" }), /client secret contains spaces or control characters/);
+		assert.equal(parseCredentialInput(null).ok, false);
+		assert.equal(parseCredentialInput("text").ok, false);
+	});
+
+	it("parseLoginInput applies the same rules to client ID and secret only", () => {
+		assert.deepEqual(parseLoginInput({ clientId: " a-client-id ", clientSecret: "a-client-secret" }), { ok: true, value: { clientId: "a-client-id", clientSecret: "a-client-secret" } });
+		const long = parseLoginInput({ clientId: "ok-id", clientSecret: "s".repeat(MAX_FIELD_LENGTH + 1) });
+		assert.ok(!long.ok && /too long/.test(long.error));
+		const spaced = parseLoginInput({ clientId: "has space", clientSecret: "ok-secret" });
+		assert.ok(!spaced.ok && /contains spaces/.test(spaced.error));
+		assert.ok(!parseLoginInput({}).ok);
 	});
 });

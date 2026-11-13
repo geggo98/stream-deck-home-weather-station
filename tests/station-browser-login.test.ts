@@ -5,7 +5,7 @@ import net from "node:net";
 import os from "node:os";
 import { describe, it, type TestContext } from "node:test";
 import { startBrowserLogin, type BrowserLoginHandle } from "../src/adapter/station/browser-login.ts";
-import { FileCredentialStore } from "../src/adapter/station/credentials.ts";
+import { FileCredentialStore, type CredentialStore, type StoredCredentials } from "../src/adapter/station/credentials.ts";
 import type { BrowserLoginPhase } from "../src/adapter/station/service.ts";
 import { RecordingLogger, makeTempDir, sendJson, startApiDouble, tokenIssuer } from "./station-helpers.ts";
 
@@ -23,7 +23,17 @@ interface Flow {
 	logger: RecordingLogger;
 }
 
-async function flow(t: TestContext, extra: { loginTimeoutMs?: number; port?: number; openUrl?: (url: string) => Promise<void> } = {}): Promise<Flow> {
+interface FlowExtra {
+	loginTimeoutMs?: number;
+	port?: number;
+	openUrl?: (url: string) => Promise<void>;
+	/** Replaces the file store (the Flow's `store` stays the real, unused one). */
+	store?: CredentialStore;
+	onSaveFailed?: (credentials: StoredCredentials) => void;
+	onSuccess?: () => void;
+}
+
+async function flow(t: TestContext, extra: FlowExtra = {}): Promise<Flow> {
 	const api = await startApiDouble(t);
 	api.route("POST /oauth2/token", tokenIssuer("login"));
 	const store = new FileCredentialStore({ dataDir: await makeTempDir(t), logger: new RecordingLogger() });
@@ -34,7 +44,9 @@ async function flow(t: TestContext, extra: { loginTimeoutMs?: number; port?: num
 		clientId: "client-id-0001",
 		clientSecret: "client-secret-0001",
 		port: extra.port ?? 0,
-		store,
+		store: extra.store ?? store,
+		onSaveFailed: extra.onSaveFailed,
+		onSuccess: extra.onSuccess,
 		baseUrl: api.baseUrl,
 		logger,
 		loginTimeoutMs: extra.loginTimeoutMs,
@@ -196,6 +208,11 @@ describe("browser login", () => {
 		const f = await flow(t);
 		const reachable = await new Promise<boolean>((resolve) => {
 			const s = net.connect(f.port(), external.address);
+			// a filtered port neither connects nor refuses: that also means "not reachable", and must not hang the suite
+			s.setTimeout(1500, () => {
+				s.destroy();
+				resolve(false);
+			});
 			s.on("connect", () => {
 				s.destroy();
 				resolve(true);
@@ -209,5 +226,150 @@ describe("browser login", () => {
 		const f = await flow(t, { loginTimeoutMs: 40 });
 		await f.handle.finished;
 		await assert.rejects(fs.stat(f.store.filePath));
+	});
+});
+
+// ---------------------------------------------------------------------------------------
+// review 3 (T3, S3)
+// ---------------------------------------------------------------------------------------
+
+function gate(): { wait: Promise<void>; release: () => void } {
+	let release: () => void = () => undefined;
+	const wait = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	return { wait, release };
+}
+
+const until = async (condition: () => boolean, what: string): Promise<void> => {
+	for (let i = 0; i < 400 && !condition(); i++) await new Promise((r) => setTimeout(r, 5));
+	assert.ok(condition(), `timed out waiting for ${what}`);
+};
+
+describe("browser login: cancel and commit", () => {
+	// Without the `committing` guard in cancel(), the cancel ends the flow as an error although the write goes through.
+	it("a cancel while the credentials are being written is too late: the flow still ends as done", async (t) => {
+		const g = gate();
+		const inner = new FileCredentialStore({ dataDir: await makeTempDir(t), logger: new RecordingLogger() });
+		const store: CredentialStore = {
+			load: () => inner.load(),
+			clear: () => inner.clear(),
+			save: async (c) => {
+				await g.wait;
+				await inner.save(c);
+			},
+		};
+		const f = await flow(t, { store });
+		await request(f.port(), `/callback?code=${CODE}&state=${f.state()}`);
+		await until(() => f.api.requestsTo("POST /oauth2/token").length === 1, "the code exchange");
+		await new Promise((r) => setTimeout(r, 30)); // the exchange answered, save is now blocked
+		f.handle.cancel("cancel during the write");
+		g.release();
+		await f.handle.finished;
+		assert.deepEqual(f.phases.map((p) => p.phase), ["waiting", "done"]);
+		assert.equal((await inner.load())?.refreshToken, "login-refresh-1");
+	});
+});
+
+describe("browser login: strict request checks", () => {
+	// Prefix and suffix matches on the Host header would accept all three.
+	it("rejects look-alike Host headers with 400 and keeps waiting", async (t) => {
+		const f = await flow(t);
+		const port = f.port();
+		const url = `/callback?code=${CODE}&state=${f.state()}`;
+		for (const host of [`localhost.evil.example:${port}`, `127.0.0.1.evil.example:${port}`, `localhost:${port + 1}`, `xlocalhost:${port}`, `localhost:${port}x`]) {
+			assert.equal((await request(port, url, { host })).status, 400, host);
+		}
+		assert.deepEqual(f.phases.map((p) => p.phase), ["waiting"]);
+		assert.equal(f.api.requestsTo("POST /oauth2/token").length, 0);
+	});
+
+	// Without `server.close()` right after the first valid callback, the second one starts a second exchange.
+	it("a second valid callback while the exchange runs makes no second token request", async (t) => {
+		const g = gate();
+		const f = await flow(t);
+		f.api.route("POST /oauth2/token", async (_req, res) => {
+			await g.wait;
+			sendJson(res, 200, { access_token: "login-access-1", refresh_token: "login-refresh-1", expires_in: 10800 });
+		});
+		const port = f.port();
+		const url = `/callback?code=${CODE}&state=${f.state()}`;
+		assert.equal((await request(port, url)).status, 200);
+		await until(() => f.api.requestsTo("POST /oauth2/token").length === 1, "the first exchange");
+		const second = await request(port, url).then((r) => r.status, () => "refused");
+		assert.ok(second === "refused" || second === 410, `second callback: ${second}`);
+		g.release();
+		await f.handle.finished;
+		assert.equal(f.api.requestsTo("POST /oauth2/token").length, 1);
+		assert.deepEqual(f.phases.map((p) => p.phase), ["waiting", "done"]);
+	});
+
+	it("a valid state without a code ends the flow with a fixed message", async (t) => {
+		const f = await flow(t);
+		assert.equal((await request(f.port(), `/callback?state=${f.state()}`)).status, 400);
+		await f.handle.finished;
+		const last = f.phases.at(-1)!;
+		assert.ok(last.phase === "error" && /no authorization code/.test(last.message));
+		assert.equal(f.api.requestsTo("POST /oauth2/token").length, 0);
+	});
+
+	// 512 characters is the limit (MAX_CODE_LENGTH): one more is refused before any request.
+	it("accepts a code of 512 characters and refuses 513", async (t) => {
+		const ok = await flow(t);
+		await request(ok.port(), `/callback?code=${"c".repeat(512)}&state=${ok.state()}`);
+		await ok.handle.finished;
+		assert.equal(ok.api.requestsTo("POST /oauth2/token").length, 1);
+		const long = await flow(t);
+		assert.equal((await request(long.port(), `/callback?code=${"c".repeat(513)}&state=${long.state()}`)).status, 400);
+		await long.handle.finished;
+		assert.equal(long.api.requestsTo("POST /oauth2/token").length, 0);
+		assert.equal(long.phases.at(-1)?.phase, "error");
+	});
+
+	it("sets Referrer-Policy and the other fixed headers on every reply", async (t) => {
+		const f = await flow(t);
+		const res = await request(f.port(), "/nope");
+		assert.equal(res.headers["referrer-policy"], "no-referrer");
+		assert.equal(res.headers["x-content-type-options"], "nosniff");
+		assert.equal(res.headers["cache-control"], "no-store");
+	});
+});
+
+describe("browser login: a failing disk write is not a failed sign-in", () => {
+	const failingStore = (code: string): CredentialStore => ({
+		load: async () => undefined,
+		clear: async () => undefined,
+		save: async () => {
+			throw Object.assign(new Error("/private/path/credentials.json.tmp: write failed"), { code });
+		},
+	});
+
+	// Before: the save sat inside the exchange's try, so this was logged as "code exchange failed" (warn) and shown as "Sign-in failed".
+	it("says the credentials could not be saved, logs the errno at error level, and hands the grant to onSaveFailed", async (t) => {
+		const saved: StoredCredentials[] = [];
+		const f = await flow(t, { store: failingStore("ENOSPC"), onSaveFailed: (c) => void saved.push(c) });
+		await request(f.port(), `/callback?code=${CODE}&state=${f.state()}`);
+		await f.handle.finished;
+		const last = f.phases.at(-1)!;
+		assert.ok(last.phase === "error");
+		assert.equal(last.phase === "error" && last.message, "Signed in at Netatmo, but the credentials could not be saved to disk (ENOSPC). Free disk space or check permissions, then try again.");
+		assert.match(f.logger.text(), /ERROR could not save the credentials after sign-in \(ENOSPC\)/);
+		assert.ok(!/code exchange failed/.test(f.logger.text()));
+		assert.ok(!f.logger.text().includes("/private/path"), "the error message (paths) is not logged");
+		assert.equal(saved.length, 1);
+		assert.equal(saved[0]?.refreshToken, "login-refresh-1");
+	});
+
+	it("a throwing onSuccess does not turn saved credentials into an error", async (t) => {
+		const f = await flow(t, {
+			onSuccess: () => {
+				throw new Error("restart failed");
+			},
+		});
+		await request(f.port(), `/callback?code=${CODE}&state=${f.state()}`);
+		await f.handle.finished;
+		assert.equal(f.phases.at(-1)?.phase, "done");
+		assert.equal((await f.store.load())?.refreshToken, "login-refresh-1");
+		assert.match(f.logger.text(), /ERROR after-sign-in step failed: Error: restart failed/);
 	});
 });

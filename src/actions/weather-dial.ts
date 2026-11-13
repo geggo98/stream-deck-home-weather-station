@@ -1,7 +1,8 @@
 /**
  * The weather dial: rotate = next/previous value, push = next sensor, rotate while pushed =
- * next station, tap = reload, long touch = min/max or history (see dial-controller.ts). Content goes out via `setFeedback` into the built-in
- * `$B1` layout (see render/dial-feedback.ts).
+ * next station, tap = reload, long touch = min/max or history (see dial-controller.ts).
+ * Content goes out via `setFeedback` into the built-in `$B1` layout (see render/dial-feedback.ts);
+ * the history view switches the strip to the custom layout `layouts/history-strip.json` and back.
  *
  * UNVERIFIED on hardware: no Stream Deck + was available while writing this; the
  * behaviour follows the SDK types and the sibling project's measurements.

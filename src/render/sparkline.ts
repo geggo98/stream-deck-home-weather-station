@@ -14,7 +14,7 @@
  */
 
 import type { HistoryPoint } from "../adapter/station/types.ts";
-import { mixColour, safeColour, scaleColour } from "./colour.ts";
+import { mixColour, safeColour, scaleColour, WARNING_COLOUR } from "./colour.ts";
 import { DIM_FACTOR, TILE_SIZE } from "./tile.ts";
 
 export interface SparklineSpec {
@@ -33,6 +33,8 @@ export interface SparklineSpec {
 	readonly bucketAnchor?: "start" | "middle";
 	readonly accent: string;
 	readonly dim?: boolean;
+	/** A warning-coloured dot in the corner, without dimming: the data is current but needs attention (see TileStatus "notice"). */
+	readonly notice?: boolean;
 	/** A 144x144 key tile with rounded background (default) or a bare chart of `width` x `height` for a strip. */
 	readonly size?: { readonly width: number; readonly height: number; readonly tile: boolean };
 }
@@ -54,6 +56,15 @@ function num(n: number): string {
 }
 
 export function composeSparkline(spec: SparklineSpec): string {
+	const svg = composeChart(spec);
+	if (spec.notice !== true) return svg;
+	const tile = spec.size?.tile ?? true;
+	const width = spec.size?.width ?? TILE_SIZE;
+	const dot = tile ? `<circle cx="14" cy="14" r="6" fill="${WARNING_COLOUR}"/>` : `<circle cx="${width - 6}" cy="6" r="4" fill="${WARNING_COLOUR}"/>`;
+	return svg.replace(/<\/svg>$/, `${dot}</svg>`);
+}
+
+function composeChart(spec: SparklineSpec): string {
 	const size = spec.size ?? { width: TILE_SIZE, height: TILE_SIZE, tile: true };
 	const accent = spec.dim ? scaleColour(safeColour(spec.accent), DIM_FACTOR) : safeColour(spec.accent);
 	const parts: string[] = [

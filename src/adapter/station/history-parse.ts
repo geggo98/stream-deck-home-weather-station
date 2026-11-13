@@ -12,7 +12,8 @@
  * Timestamps: `HistoryPoint.t` is the timestamp exactly as the API reports it. With
  * real_time=false the spec documents it as "offset + scale/2", the MIDDLE of the bucket
  * (UNVERIFIED against a live response; `npm run probe -- --history` prints the observed
- * offsets). The parser does not shift it. Both are accepted. Strict means: any structural surprise (wrong type, non-finite number,
+ * offsets). The parser does not shift it. Both response shapes are accepted.
+ * Strict means: any structural surprise (wrong type, non-finite number,
  * too many points) rejects the whole response; a finite number outside the plausible range
  * of the metric is dropped like a hole, mirroring parse.ts.
  */
@@ -20,7 +21,7 @@
 import { NetatmoError } from "./errors.ts";
 import type { HistoryMetric, HistoryPoint, HistoryRequest, HistoryWindow, ModuleType } from "./types.ts";
 
-/** Upper bound of points we accept in total (3 d at 30 min is 144; this is a sanity net). */
+/** Upper bound of points we accept in total (the real maximum is 72: 3 d uses scale 1hour; 6 h and 24 h at 30min give 12 and 48; this is a sanity net). */
 export const MAX_HISTORY_POINTS = 2000;
 /** Upper bound of chunks in the optimised shape. */
 export const MAX_HISTORY_CHUNKS = 400;

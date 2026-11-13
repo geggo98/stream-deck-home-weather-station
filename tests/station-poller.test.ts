@@ -248,7 +248,9 @@ describe("Poller: errors and backoff", () => {
 		const state = h.poller.getConnectionState();
 		assert.equal(state.kind, "error");
 		assert.ok(!JSON.stringify(state).includes("SECRET-FRAGMENT"));
-		assert.ok(!h.logger.text().includes("SECRET-FRAGMENT"));
+		// the user-facing state stays generic, but the cause is logged (the service's redacting logger masks secrets in it)
+		assert.match(h.logger.text(), /ERROR .*unexpected error: TypeError: cannot read property of undefined/);
+		assert.match(h.logger.text(), /ERROR .* @ /, "with the first stack frames");
 	});
 });
 

@@ -15,7 +15,7 @@
 import type { ConnectionState, StationSnapshot, UnitPreferences } from "../adapter/station/types.ts";
 import type { GlobalSettings } from "../pi-protocol.ts";
 import type { ActionSettings } from "../focus/settings.ts";
-import { accentFor, NEUTRAL_COLOUR } from "./colour.ts";
+import { accentFor, NEUTRAL_COLOUR, WARNING_COLOUR } from "./colour.ts";
 import { svgToDataUri } from "./data-uri.ts";
 import { formatMetric, joinValueUnit, resolveUnits } from "./format.ts";
 import { gaugePercent, METRICS, type DisplayMetricId } from "./metrics.ts";
@@ -25,6 +25,9 @@ import { composeDialIcon } from "./tile.ts";
 import { cleanLabel, MAX_DIAL_LABEL_CHARS, statusWord } from "./title.ts";
 
 export type Opacity = 0 | 0.1 | 0.2 | 0.3 | 0.4 | 0.5 | 0.6 | 0.7 | 0.8 | 0.9 | 1;
+
+/** Appended to the strip title while the renewed sign-in could not be saved. */
+export const WARNING_MARK = "!";
 
 /** Opacity of a strip that shows old or missing data. */
 export const DIM_OPACITY: Opacity = 0.4;
@@ -71,10 +74,13 @@ export function buildHistoryStrip(input: Omit<HistoryViewInput, "strip">): Histo
 	const def = METRICS[input.metric];
 	const opacity: Opacity = view.classification.kind === "value" && !view.classification.stale ? 1 : DIM_OPACITY;
 	const lines = (view.title ?? "").split("\n");
+	const flagged = view.classification.kind === "value" && view.classification.warning && !view.classification.stale;
+	const baseTitle = cleanLabel(input.settings.label, MAX_DIAL_LABEL_CHARS) || def.label;
 	return {
-		title: { value: cleanLabel(input.settings.label, MAX_DIAL_LABEL_CHARS) || def.label, opacity },
+		title: { value: flagged ? `${baseTitle} ${WARNING_MARK}` : baseTitle, opacity },
 		chart: { value: svgToDataUri(view.svg), opacity },
-		value: { value: lines.join(" · "), opacity },
+		// A status face ("Sign in", "No\nhistory") is one phrase: its line breaks are for the narrow key, not for the strip.
+		value: { value: view.chart ? lines.join(" · ") : lines.join(" "), opacity },
 	};
 }
 
@@ -98,7 +104,7 @@ export function buildDialFeedback(input: DialViewInput): DialFeedbackPayload {
 		return {
 			icon: { value: svgToDataUri(composeDialIcon(def.glyph, NEUTRAL_COLOUR, true)), opacity: DIM_OPACITY },
 			title: { value: baseTitle, opacity: DIM_OPACITY },
-			value: { value: statusWord(c.kind), opacity: DIM_OPACITY },
+			value: { value: statusWord(c.kind).replace(/\n/g, " "), opacity: DIM_OPACITY },
 			indicator: { value: 0, opacity: DIM_OPACITY, bar_fill_c: NEUTRAL_COLOUR },
 		};
 	}
@@ -126,11 +132,14 @@ export function buildDialFeedback(input: DialViewInput): DialFeedbackPayload {
 	}
 
 	const opacity: Opacity = c.stale ? DIM_OPACITY : 1;
-	const title = c.stale && c.ageMs !== undefined ? `${baseTitle} · ${formatAge(c.ageMs)}` : baseTitle;
+	// The renewed sign-in could not be saved: the value stays at full strength; the title gets a
+	// "!" and the indicator bar turns warning-coloured (staleness wins when both apply).
+	const flagged = c.warning && !c.stale;
+	const title = c.stale && c.ageMs !== undefined ? `${baseTitle} · ${formatAge(c.ageMs)}` : flagged ? `${baseTitle} ${WARNING_MARK}` : baseTitle;
 	return {
 		icon: { value: svgToDataUri(composeDialIcon(def.glyph, accent, c.stale)), opacity },
 		title: { value: title, opacity },
 		value: { value: valueText, opacity },
-		indicator: { value: gaugePercent(def, c.value), opacity, bar_fill_c: accent },
+		indicator: { value: gaugePercent(def, c.value), opacity, bar_fill_c: flagged ? WARNING_COLOUR : accent },
 	};
 }

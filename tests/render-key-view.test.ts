@@ -103,12 +103,12 @@ describe("display table", () => {
 	});
 
 	it("module gone from the account: 'Pick module'; metric not reported: 'No data'", () => {
-		assert.equal(view({ settings: { moduleKey: makeModuleKey(STATION_ID, "00:00:5e:00:53:99") } }).title, "Pick module");
+		assert.equal(view({ settings: { moduleKey: makeModuleKey(STATION_ID, "00:00:5e:00:53:99") } }).title, "Pick\nmodule");
 		assert.equal(view({ settings: { moduleKey: OUTDOOR_KEY }, metric: "co2" }).title, "No data");
 	});
 
 	it("an explicitly cleared module stays empty instead of adopting", () => {
-		assert.equal(view({ settings: { moduleKey: "" } }).title, "Pick module");
+		assert.equal(view({ settings: { moduleKey: "" } }).title, "Pick\nmodule");
 	});
 
 	it("every status word in the table is what the table says", () => {
@@ -221,7 +221,7 @@ describe("freshness, selection and text helpers", () => {
 	});
 
 	it("cleans untrusted labels", () => {
-		assert.equal(cleanLabel("Gar\u0000den‮!"), "Gar den !");
+		assert.equal(cleanLabel("Gar\u0000den\u202e!"), "Gar den !");
 		assert.equal(cleanLabel("a very long module name"), "a very l\u2026");
 		assert.equal(cleanLabel(undefined), "");
 		assert.equal(joinLines([undefined, "", "a", "b"]), "a\nb");

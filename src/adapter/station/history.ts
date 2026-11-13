@@ -142,12 +142,17 @@ export class HistoryService {
 			result = { kind: "ok", request, points: parsed.points, stepMs: parsed.stepMs, fetchedAt: this.opts.now() };
 		} catch (error) {
 			if (generation !== this.generation) return discarded;
-			const failure = toNetatmoError(error);
+			const failure = toNetatmoError(error, this.log);
 			result = { kind: "error", request, reason: reasonOf(failure), message: failure.message };
 			ttl = failure.kind === "rate-limited" && failure.retryAt !== undefined
 				? Math.min(HISTORY_CACHE_TTL_MS, Math.max(HISTORY_MIN_INTERVAL_MS, failure.retryAt - this.opts.now()))
 				: HISTORY_MIN_INTERVAL_MS;
-			this.log.debug(`history ${request.metric} ${request.window} failed: ${failure.kind}`);
+			// A protocol failure (the answer's shape is not what the parser expects) is persistent and
+			// invisible otherwise (the key just says "No history"), and the default log level hides
+			// debug: warn. Transient, rate and auth failures are already reported by the poller.
+			const detail = `${failure.kind}${failure.status !== undefined ? ` HTTP ${failure.status}` : ""}${failure.code !== undefined ? ` code ${failure.code}` : ""}`;
+			if (failure.kind === "protocol") this.log.warn(`history ${request.metric} ${request.window} failed (${detail}): ${failure.message}`);
+			else this.log.debug(`history ${request.metric} ${request.window} failed (${detail})`);
 		}
 		// a result fetched under old credentials must neither be cached nor shown
 		if (generation !== this.generation) return discarded;

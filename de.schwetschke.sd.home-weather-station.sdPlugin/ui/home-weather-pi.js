@@ -1,11 +1,11 @@
 /**
- * Shared Property Inspector helpers for both pages (measurement.html, dial.html).
+ * Shared Property Inspector helpers for every page (the account block is identical in all of them).
  *
  * Load order in each page:  vendor/sdpi-components.js -> home-weather-pi.js -> init/<page>.js
  * The per-page init file is a separate script because the pages carry a Content
  * Security Policy that refuses inline script.
  *
- * Rules this file keeps (tests/pi-*.test.ts check them):
+ * Rules this file keeps (tests/pi-logic.test.ts and tests/pi-markup.test.ts check them):
  *  - Secrets (client secret, refresh token) are read from plain inputs that carry NO
  *    `setting=` binding, sent once with `sendToPlugin`, and the inputs are emptied in
  *    the same click handler. They are never stored in Stream Deck settings, never
@@ -22,7 +22,7 @@
 (function () {
 	"use strict";
 
-	/** Must stay identical to PI_EVENTS in src/pi-protocol.ts (tests/pi-protocol.test.ts). */
+	/** Must stay identical to PI_EVENTS in src/pi-protocol.ts (tests/pi-logic.test.ts). */
 	const EVENTS = {
 		getAccountStatus: "getAccountStatus",
 		setCredentials: "setCredentials",
@@ -33,6 +33,7 @@
 		getMetrics: "getMetrics",
 		accountStatus: "accountStatus",
 		credentialsResult: "credentialsResult",
+		clearResult: "clearResult",
 		browserLogin: "browserLogin",
 		getGlobalSettings: "getGlobalSettings",
 		setGlobalSettings: "setGlobalSettings",
@@ -47,8 +48,10 @@
 	const CLEAR_ARM_MS = 4000;
 	/** Text from the plugin is shown clipped; it is meant to be a short sentence. */
 	const MAX_TEXT = 240;
-	/** Upper bound for a pasted credential. Real ones are far shorter. */
-	const MAX_CREDENTIAL_LENGTH = 4096;
+	/** Longer plugin texts (they name a file location). */
+	const MAX_LONG_TEXT = 480;
+	/** Upper bound for a pasted credential; equal to MAX_CREDENTIAL_CHARS in src/actions/pi-router.ts (pinned by a test). */
+	const MAX_CREDENTIAL_LENGTH = 512;
 
 	/* ------------------------------------------------------------------ */
 	/* Pure functions                                                      */
@@ -81,6 +84,8 @@
 		const hint = typeof status.clientIdHint === "string" && status.clientIdHint ? clip(status.clientIdHint, 12) : "";
 		switch (status.state) {
 			case "not-configured":
+				// A message means something more specific than "never set up" (e.g. an unreadable credentials file).
+				if (message) return { text: "Not connected: " + message, cls: "pi-status-warn" };
 				return { text: "Not set up yet. Enter your credentials below.", cls: "pi-status-warn" };
 			case "loading":
 				return { text: "Connecting…", cls: "pi-status-unknown" };
@@ -93,7 +98,11 @@
 					if (time) parts.push("updated " + time);
 				}
 				if (hint) parts.push("app ending " + hint);
-				return { text: "Connected" + (parts.length ? ": " + parts.join(", ") : ""), cls: "pi-status-ok" };
+				const warning = clip(status.warning, MAX_TEXT);
+				const text = "Connected" + (parts.length ? ": " + parts.join(", ") : "");
+				// Data is current, but something needs attention: the words say so too, not only the colour.
+				if (warning) return { text: text + ". Warning: " + warning, cls: "pi-status-warn" };
+				return { text, cls: "pi-status-ok" };
 			}
 			case "error":
 				return {
@@ -119,37 +128,40 @@
 	 * means a bad paste (a line break, two tokens) and is rejected rather than "fixed".
 	 * The error text never contains the values.
 	 */
+	function checkValue(name, value) {
+		if (hasWhitespace(value)) return name + " contains spaces or line breaks. Copy it again.";
+		if (value.length > MAX_CREDENTIAL_LENGTH) {
+			return name + " is too long (more than " + MAX_CREDENTIAL_LENGTH + " characters). Copy only the value itself.";
+		}
+		return "";
+	}
+
+	/** "Please fill in" first, then the per-value checks; the text never contains a value. */
+	function validateFields(fields) {
+		const missing = fields.filter(function (f) { return !f[1]; }).map(function (f) { return f[0]; });
+		if (missing.length) return "Please fill in: " + missing.join(", ") + ".";
+		for (const f of fields) {
+			const problem = checkValue(f[0], f[1]);
+			if (problem) return problem;
+		}
+		return "";
+	}
+
 	function buildCredentialsMessage(values) {
 		const clientId = String((values && values.clientId) || "").trim();
 		const clientSecret = String((values && values.clientSecret) || "").trim();
 		const refreshToken = String((values && values.refreshToken) || "").trim();
-		const missing = [];
-		if (!clientId) missing.push("Client ID");
-		if (!clientSecret) missing.push("Client secret");
-		if (!refreshToken) missing.push("Refresh token");
-		if (missing.length) return { ok: false, error: "Please fill in: " + missing.join(", ") + "." };
-		for (const [name, value] of [
-			["Client ID", clientId],
-			["Client secret", clientSecret],
-			["Refresh token", refreshToken],
-		]) {
-			if (hasWhitespace(value)) return { ok: false, error: name + " contains spaces or line breaks. Copy it again." };
-			if (value.length > MAX_CREDENTIAL_LENGTH) return { ok: false, error: name + " is too long." };
-		}
+		const problem = validateFields([["Client ID", clientId], ["Client secret", clientSecret], ["Refresh token", refreshToken]]);
+		if (problem) return { ok: false, error: problem };
 		return { ok: true, message: { event: EVENTS.setCredentials, clientId, clientSecret, refreshToken } };
 	}
 
-	/** The experimental browser sign-in needs the app's id and secret, but no token. */
+	/** The browser sign-in needs the app's id and secret, but no token. */
 	function buildBrowserLoginMessage(values) {
 		const clientId = String((values && values.clientId) || "").trim();
 		const clientSecret = String((values && values.clientSecret) || "").trim();
-		const missing = [];
-		if (!clientId) missing.push("Client ID");
-		if (!clientSecret) missing.push("Client secret");
-		if (missing.length) return { ok: false, error: "Please fill in: " + missing.join(", ") + "." };
-		if (hasWhitespace(clientId) || hasWhitespace(clientSecret) || clientId.length > MAX_CREDENTIAL_LENGTH || clientSecret.length > MAX_CREDENTIAL_LENGTH) {
-			return { ok: false, error: "Client ID or secret looks wrong. Copy it again." };
-		}
+		const problem = validateFields([["Client ID", clientId], ["Client secret", clientSecret]]);
+		if (problem) return { ok: false, error: problem };
 		return { ok: true, message: { event: EVENTS.startBrowserLogin, clientId, clientSecret } };
 	}
 
@@ -338,7 +350,29 @@
 		function setSaving(on) {
 			el.save.disabled = on;
 			if (saveTimer !== null) timers.clearTimeout(saveTimer);
-			saveTimer = on ? timers.setTimeout(function () { setSaving(false); }, SAVE_TIMEOUT_MS) : null;
+			saveTimer = on
+				? timers.setTimeout(function () {
+					setSaving(false);
+					showResult(
+						el.result,
+						"No answer from the plugin. Check the account status before entering the token again; it may already be used up.",
+						true,
+					);
+				}, SAVE_TIMEOUT_MS)
+				: null;
+		}
+
+		// "Clear" stays busy until the plugin says whether the file could be removed.
+		let clearBusyTimer = null;
+		function setClearing(on) {
+			if (el.clear) el.clear.disabled = on;
+			if (clearBusyTimer !== null) timers.clearTimeout(clearBusyTimer);
+			clearBusyTimer = on
+				? timers.setTimeout(function () {
+					setClearing(false);
+					showResult(el.result, "No answer from the plugin. Check the account status to see whether the credentials are gone.", true);
+				}, SAVE_TIMEOUT_MS)
+				: null;
 		}
 
 		// Status: ask once, and say so if nobody answers.
@@ -369,17 +403,22 @@
 						showResult(el.result, "Saved. The fields were cleared and stay on this computer.", false);
 					} else if (message.saved === true) {
 						// The credentials are stored (the refresh token was already used up), only the
-						// first data request failed. Asking for them again would be wrong.
-						const why = clip(message.error, MAX_TEXT);
-						showResult(
-							el.result,
-							"Saved, but station data could not be loaded yet" + (why ? ": " + why : "") + ". Polling retries by itself.",
-							true,
-						);
+						// first data request failed. The plugin's text is complete and says what happens next.
+						const why = clip(message.error, MAX_LONG_TEXT);
+						showResult(el.result, why || "Saved, but station data could not be loaded yet.", true);
 					} else {
-						const why = clip(message.error, MAX_TEXT);
+						const why = clip(message.error, MAX_LONG_TEXT);
 						showResult(el.result, "Not saved" + (why ? ": " + why : ".") + " The fields were cleared; enter the values again.", true);
 					}
+					break;
+				}
+				case "clearResult": {
+					statusAnswered = true;
+					setClearing(false);
+					const status = statusOf(message);
+					if (status) showStatus(status);
+					if (message.ok) showResult(el.result, "Stored credentials removed.", false);
+					else showResult(el.result, clip(message.error, MAX_LONG_TEXT) || "The stored credentials could not be removed.", true);
 					break;
 				}
 				case "browserLogin": {
@@ -391,9 +430,14 @@
 					if (message.phase === "waiting") {
 						showResult(el.loginResult, text || "Waiting for you to sign in in the browser…", false);
 					} else if (message.phase === "done") {
-						statusAnswered = true;
 						const status = statusOf(message);
-						if (status) showStatus(status);
+						if (status) {
+							statusAnswered = true;
+							showStatus(status);
+						} else {
+							// The plugin could not read the status: ask again instead of leaving the old line.
+							askStatus();
+						}
 						showResult(el.loginResult, text || "Signed in.", false);
 					} else {
 						showResult(el.loginResult, text || "Browser sign-in failed.", true);
@@ -402,6 +446,8 @@
 				}
 				case "globalSettings": {
 					showGlobal(message);
+					// A change that could not be saved: the values shown are the ones still in effect.
+					if (typeof message.error === "string" && message.error) showResult(el.result, clip(message.error, MAX_LONG_TEXT), true);
 					break;
 				}
 				case "getModules":
@@ -456,8 +502,8 @@
 				disarmClear();
 				wipeSecrets();
 				client.send({ event: EVENTS.clearCredentials });
-				showResult(el.result, "Stored credentials removed.", false);
-				timers.setTimeout(askStatus, 500);
+				setClearing(true);
+				showResult(el.result, "Removing…", false);
 			});
 		}
 
@@ -480,8 +526,7 @@
 					return;
 				}
 				client.send(built.message);
-				// The secret goes at once; the id is not secret and stays for a second try
-				// after the redirect address has been registered.
+				// The secret goes at once and is never kept; the id is not secret and stays for a second try.
 				if (el.clientSecret) el.clientSecret.value = "";
 				showResult(el.loginResult, "Starting the browser sign-in…", false);
 			});

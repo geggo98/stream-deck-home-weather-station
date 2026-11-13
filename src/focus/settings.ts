@@ -9,7 +9,7 @@
 import type { HistoryWindow } from "../adapter/station/types.ts";
 import type { MeasurementSettings } from "../pi-protocol.ts";
 
-/** Fields of the focus family (docs/FOCUS-AND-HISTORY.md, section 5). */
+/** Fields the focus family adds to a key or dial. Raw: what the Property Inspector wrote (text fields give strings), read through the accessors below. */
 export interface FocusSettings {
 	/** true = behave like the focus display: module and metric come from the focus. */
 	followFocus?: boolean;
@@ -21,7 +21,15 @@ export interface FocusSettings {
 	autoRotateStartOn?: boolean;
 }
 
-export type ActionSettings = MeasurementSettings & FocusSettings;
+/**
+ * What an action's settings really are: the measurement fields as stored, with the fields the
+ * focus family widens (a threshold typed into a text field is a string; the window is any
+ * string until `historyWindowOf` has checked it). `MeasurementSettings` declares the number
+ * form of those fields; intersecting it with `FocusSettings` would narrow them to `number`
+ * and make every `typeof` check on them look dead. Read them through `alertOf`,
+ * `historyWindowOf` and `autoRotateSecondsOf`.
+ */
+export type ActionSettings = Omit<MeasurementSettings, keyof FocusSettings> & FocusSettings;
 
 export const AUTO_ROTATE_DEFAULT_SECONDS = 8;
 export const AUTO_ROTATE_MIN_SECONDS = 3;

@@ -17,6 +17,9 @@ import {
 	areGlobalSettingsLoaded,
 	forgetActionSettings,
 	getCachedGlobalSettings,
+	globalSettingsError,
+	markGlobalSettingsLoadFailed,
+	SETTINGS_UNAVAILABLE_MESSAGE,
 	getRememberedActionSettings,
 	markGlobalSettingsLoaded,
 	MAX_TRACKED_ACTION_SETTINGS,
@@ -42,6 +45,13 @@ describe("updateGlobalSettings", () => {
 		// every other key missing.
 		await assert.rejects(updateGlobalSettings((current) => ({ ...current, pollIntervalSeconds: 120 }), 20), /never loaded/);
 		assert.equal(writes, 0, "nothing may be persisted while the settings are unknown");
+	});
+
+	it("a failed load is reported as such, and the report goes away once the gate is open", () => {
+		assert.equal(globalSettingsError(), undefined, "nothing reported before a failure");
+		markGlobalSettingsLoadFailed();
+		assert.equal(globalSettingsError(), SETTINGS_UNAVAILABLE_MESSAGE);
+		assert.equal(areGlobalSettingsLoaded(), false, "the gate stays closed: nothing may be written over unknown settings");
 	});
 
 	it("a bounded wait ends even when the load never completes", async () => {
@@ -91,19 +101,35 @@ describe("updateGlobalSettings", () => {
 		assert.deepEqual(order, [1, 2, 3]);
 	});
 
-	it("keeps the new values in the cache after a failed write, and the chain alive", async () => {
+	it("takes the new values back out of the cache after a failed write, tells listeners, and keeps the chain alive", async () => {
 		setCachedGlobalSettings({ pollIntervalSeconds: 300 });
+		const seen: Array<number | undefined> = [];
+		const off = onGlobalSettingsChanged(() => seen.push(pollIntervalOf(getCachedGlobalSettings())));
 		setGlobalSettingsWriter(async () => {
 			throw new Error("disk full");
 		});
 		await assert.rejects(updateGlobalSettings((c) => ({ ...c, pollIntervalSeconds: 900 })), /disk full/);
-		assert.equal(getCachedGlobalSettings().pollIntervalSeconds, 900);
+		off();
+		assert.equal(getCachedGlobalSettings().pollIntervalSeconds, 300, "a value that was never saved must not stay in effect");
+		assert.deepEqual(seen, [900, 300], "listeners saw the value and then its withdrawal");
+		assert.equal(globalSettingsError(), undefined, "an open gate reports no load failure");
 		const persisted: GlobalSettings[] = [];
 		setGlobalSettingsWriter(async (gs) => {
 			persisted.push(gs);
 		});
 		await updateGlobalSettings((c) => ({ ...c, unitSystem: "metric" }));
-		assert.equal(persisted[0]?.pollIntervalSeconds, 900, "the failed value rides along on the next write");
+		assert.equal(persisted[0]?.pollIntervalSeconds, 300, "the failed value does not ride along");
+		assert.equal(persisted[0]?.unitSystem, "metric", "the chain still works");
+	});
+
+	it("does not undo a cache that something else replaced while the write was failing", async () => {
+		setCachedGlobalSettings({ pollIntervalSeconds: 300 });
+		setGlobalSettingsWriter(async () => {
+			setCachedGlobalSettings({ pollIntervalSeconds: 600 }); // an external edit arrives meanwhile
+			throw new Error("disk full");
+		});
+		await assert.rejects(updateGlobalSettings((c) => ({ ...c, pollIntervalSeconds: 900 })), /disk full/);
+		assert.equal(getCachedGlobalSettings().pollIntervalSeconds, 600);
 	});
 
 	it("fails clearly when no writer was injected", async () => {
@@ -173,13 +199,13 @@ describe("single writer", () => {
 				if (entry.isDirectory()) walk(path);
 				else if (entry.name.endsWith(".ts")) {
 					const code = readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-					if (/\.setGlobalSettings\s*\(/.test(code)) callers.push(path.slice(srcDir.length).split(sep).join("/"));
+					if (/\bsettings\.setGlobalSettings\s*\(/.test(code)) callers.push(path.slice(srcDir.length).split(sep).join("/"));
 				}
 			}
 		};
 		walk(srcDir);
 		// Sanity: the scan must be able to see the call it is looking for.
-		assert.ok(readFileSync(join(srcDir, "plugin.ts"), "utf-8").includes("setGlobalSettings"), "scan target moved");
+		assert.ok(/\bsettings\.setGlobalSettings\s*\(/.test(readFileSync(join(srcDir, "plugin.ts"), "utf-8")), "scan target moved");
 		assert.deepEqual(callers, ["plugin.ts"]);
 	});
 });

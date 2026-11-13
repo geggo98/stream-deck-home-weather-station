@@ -54,7 +54,7 @@ describe("buildHistoryView", () => {
 		assert.equal(buildHistoryView(input({ connection: { kind: "no-credentials" } })).title, "Set up");
 		assert.equal(buildHistoryView(input({ hasSource: false })).title, "Offline");
 		assert.equal(buildHistoryView(input({ snapshot: makeSnapshot([baseModule({ reachable: false, measuredAt: NOW - 300 * MIN })]) })).title, "No signal");
-		assert.equal(buildHistoryView(input({ settings: { moduleKey: makeModuleKey(STATION_ID, "00:00:5e:00:53:99") } })).title, "Pick module");
+		assert.equal(buildHistoryView(input({ settings: { moduleKey: makeModuleKey(STATION_ID, "00:00:5e:00:53:99") } })).title, "Pick\nmodule");
 	});
 
 	it("draws rain as bars with the total in the title", () => {

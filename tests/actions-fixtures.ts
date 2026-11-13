@@ -233,8 +233,11 @@ export class FakeService extends FakeSource implements WeatherService {
 		this.credentialInputs.push(input);
 		return this.setCredentialsResult;
 	}
+	/** When set, clearCredentials rejects with it (the file could not be removed). */
+	clearError: Error | undefined;
 	async clearCredentials(): Promise<void> {
 		this.cleared++;
+		if (this.clearError) throw this.clearError;
 	}
 	async startBrowserLogin(
 		_input: { clientId: string; clientSecret: string },
