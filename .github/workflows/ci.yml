@@ -110,6 +110,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
+      - name: Workflow syntax (actionlint)
+        # An invalid workflow file is not reported by the push that breaks it: GitHub just does not run it.
+        run: devenv shell -- actionlint -no-color
+
       - name: Workflow static analysis (zizmor)
         # Unpinned or over-privileged actions, template injection, credential
         # persistence, known-vulnerable actions. Online audits need the read-only token.
@@ -117,7 +121,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Secret scan over the whole history (gitleaks: generic rules + calibrated secret shapes)
+      - name: Secret scan over the whole history (gitleaks, generic rules and calibrated secret shapes)
         # CI has no .env.local, so only the generic rules and the project's narrow allowlist
         # apply here; the local hooks add the real values of the maintainer's machine.
         run: devenv shell -- python3 -I scripts/gitleaks-local-secrets.py --history
