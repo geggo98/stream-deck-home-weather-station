@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144">
+  <rect width="144" height="144" rx="18" fill="#29343E"/>
+  <path d="M47 30 C55 23 63 37 72 30 S89 23 97 30 M47 40 C55 33 63 47 72 40 S89 33 97 40 M47 50 C55 43 63 57 72 50 S89 43 97 50" fill="none" stroke="#A4CEAE" stroke-width="3.5" stroke-linecap="round"/>
+  <text x="72" y="101" fill="#FFFFFF" font-family="sans-serif" font-size="42" font-weight="700" text-anchor="middle">612</text>
+  <text x="72" y="123" fill="#C4CBD0" font-family="sans-serif" font-size="15" text-anchor="middle">ppm</text>
+</svg>

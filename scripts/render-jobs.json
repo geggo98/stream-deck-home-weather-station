@@ -1,0 +1,54 @@
+[
+	{
+		"name": "plugin-icon-a",
+		"kind": "png",
+		"w": 1024,
+		"h": 1024,
+		"min_square": true,
+		"prompt": "One square flat app-icon concept for a home weather station plugin. Motif: a small round sensor puck seen from the front, centred, with a simple sun peeking out behind a soft cloud drawn on its face. Calm blue and teal palette with a soft vertical gradient background, generous padding, rounded-square composition, clean vector look, no gloss, no photographic detail. Keep the design generic and original; do not copy any real product."
+	},
+	{
+		"name": "plugin-icon-b",
+		"kind": "png",
+		"w": 1024,
+		"h": 1024,
+		"min_square": true,
+		"prompt": "One square flat app-icon concept for a home weather station plugin. Motif: a tall rounded cylinder sensor tower in profile, standing on a small base, with a sun above-left and a small cloud above-right. Deep teal background with lighter teal and white accents, minimal flat vector style, generous padding. Keep the design generic and original; do not copy any real product."
+	},
+	{
+		"name": "plugin-icon-c",
+		"kind": "png",
+		"w": 1024,
+		"h": 1024,
+		"min_square": true,
+		"prompt": "One square flat app-icon concept for a home weather station plugin. Motif: two overlapping circles, a larger one holding a sun with short rays and a smaller one holding a raindrop and a cloud, like two small sensor modules side by side. Calm blue and teal palette, soft gradient, flat vector style, generous padding. Keep the design generic and original; do not copy any real product."
+	},
+	{
+		"name": "tile-temperature",
+		"kind": "svg",
+		"w": 144,
+		"h": 144,
+		"prompt": "Create an illustrative 144x144 key tile for a weather display. Dark slate rounded square (corner radius 18, fills the whole canvas). Top-centre: a simple thermometer glyph in warm orange. Below it the large placeholder number \"21.4\" in white bold sans-serif, and under that a small light-grey \"°C\". Generic, flat, no decoration. The text must be exactly these strings and nothing else."
+	},
+	{
+		"name": "tile-humidity",
+		"kind": "svg",
+		"w": 144,
+		"h": 144,
+		"prompt": "Create an illustrative 144x144 key tile for a weather display. Dark slate rounded square (corner radius 18, fills the whole canvas). Top-centre: a simple water-drop glyph in light blue. Below it the large placeholder number \"56\" in white bold sans-serif, and under that a small light-grey \"%\". Generic, flat, no decoration. The text must be exactly these strings and nothing else."
+	},
+	{
+		"name": "tile-co2",
+		"kind": "svg",
+		"w": 144,
+		"h": 144,
+		"prompt": "Create an illustrative 144x144 key tile for a weather display. Dark slate rounded square (corner radius 18, fills the whole canvas). Top-centre: a simple glyph of three wavy air lines in soft green. Below it the large placeholder number \"612\" in white bold sans-serif, and under that a small light-grey \"ppm\". Generic, flat, no decoration. The text must be exactly these strings and nothing else."
+	},
+	{
+		"name": "tile-wind",
+		"kind": "svg",
+		"w": 144,
+		"h": 144,
+		"prompt": "Create an illustrative 144x144 key tile for a weather display. Dark slate rounded square (corner radius 18, fills the whole canvas). Top-centre: a simple wind glyph (two curled streamlines) in light teal. Below it the large placeholder number \"3.2\" in white bold sans-serif, and under that a small light-grey \"m/s\". Generic, flat, no decoration. The text must be exactly these strings and nothing else."
+	}
+]

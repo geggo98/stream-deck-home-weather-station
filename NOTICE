@@ -1,0 +1,42 @@
+Home Weather Station (unofficial Stream Deck plugin)
+Copyright (c) 2026 Stefan Schwetschke. Licensed under the MIT License, see LICENSE.
+
+Trademarks and non-affiliation
+------------------------------
+"Netatmo" is a trademark of its respective owner. "Stream Deck" and "Elgato" are
+trademarks of Corsair Memory, Inc. This is an independent, community project. It is
+not affiliated with, produced, authorised, sponsored, or endorsed by any of these
+companies. Brand names are used only to describe the weather station and the software
+this plugin is compatible with. This project contains no Netatmo or Elgato logos,
+product images, or brand artwork. Reasoning and open questions: docs/BRANDING.md.
+
+Non-commercial use
+------------------
+The Netatmo Weather API may, according to Netatmo's API terms, only be used for
+non-commercial purposes. This plugin is provided free of charge for personal use and
+must not be used commercially.
+
+Third-party material
+--------------------
+- Lucide icons (https://lucide.dev), ISC License. A subset of Lucide icons derives from
+  Feather and is additionally under the MIT License; the licence texts with their
+  copyright lines must accompany the icons, see the licence file next to the icons in
+  de.schwetschke.sd.home-weather-station.sdPlugin/imgs/icons/ (written together with the icon set).
+- sdpi-components (MIT License), vendored for the Property Inspector, and Lit
+  (BSD-3-Clause License), which that bundle contains. Exact versions, source URLs and
+  hashes: de.schwetschke.sd.home-weather-station.sdPlugin/ui/vendor/VENDORED.md.
+- Stream Deck SDK for Node.js, @elgato/streamdeck (MIT License), bundled into the plugin's
+  bin/plugin.js. Its licence is in node_modules/@elgato/streamdeck/LICENSE after npm ci.
+- Other npm dependencies are build-time tools and are not shipped in the plugin;
+  `npm run scan` reports their licences.
+
+Artwork provenance
+------------------
+The coloured key artwork and plugin/category images under assets/ and the plugin's imgs/
+folder (other than the Lucide icons above) are original, AI-generated artwork, created with
+a generative image model driven by scripts/render-with-codex.py from prompts that contain no
+reference to any brand, logo or product photo. They have been looked at by AI agents only (the generating run and the integrating
+assistant); the maintainer has not reviewed them yet and should before a release. Raw rendered
+output stays untracked. Whether and how AI-generated images are protected by copyright is
+unsettled, so no copyright claim is made for them beyond what the law grants.
+Process and prompts: docs/RENDERING.md.

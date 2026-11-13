@@ -1,0 +1,72 @@
+name: Bug report
+description: Something does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before you paste anything, read this.** Issues are public and stay in the history.
+
+        Do NOT post:
+        - client id, client secret, access token or refresh token (even expired ones)
+        - the contents of `credentials.json`
+        - logs that you have not read through and redacted
+        - station ids or module ids (they are MAC addresses), your coordinates, address or station and module names
+        - screenshots that show any of the above, including the Netatmo web or phone app
+
+        Replace such values with `<redacted>`. If you are unsure whether something is sensitive, leave it out and say so.
+        Suspected credential leaks go to the private channel described in SECURITY.md, not here.
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Checklist
+      options:
+        - label: I removed tokens, secrets, station and module ids, coordinates and names from everything I paste below.
+          required: true
+        - label: I read the troubleshooting section of the README and docs/SETUP.md.
+          required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version
+      placeholder: "for example 0.1.0, from the GitHub Release you installed"
+    validations:
+      required: true
+  - type: input
+    id: sd
+    attributes:
+      label: Stream Deck app version and operating system
+      placeholder: "app version, macOS or Windows version, device model"
+    validations:
+      required: true
+  - type: dropdown
+    id: key_state
+    attributes:
+      label: What does the key show?
+      options:
+        - A value
+        - A dimmed value (stale data)
+        - '"No signal"'
+        - '"Sign in"'
+        - '"Set up"'
+        - '"..." that never goes away'
+        - The default icon (nothing painted)
+        - Something else
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted log excerpt (optional)
+      description: Only the relevant lines, with every token, id and name replaced by `<redacted>`.
+      render: text

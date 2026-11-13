@@ -1,0 +1,22 @@
+# osv-scanner configuration (picked up next to package-lock.json; the pre-push hook in
+# devenv.nix passes it explicitly). Every entry is a reviewed, time-limited exception:
+# `ignoreUntil` makes the gate fail again on that date until somebody looks again.
+# Rules: one entry per advisory id, a precise reason, a date at most ~90 days ahead.
+# Do not add an entry just to get a green run. Documented in SECURITY.md ("Known advisories").
+
+# zod 3.25.76 is bundled into the plugin through @elgato/utils 0.6.0 (@elgato/streamdeck
+# 2.1.2). The fixed version 4.6.6 is outside the SDK's declared range (zod ^3.25.24), and
+# the newest @elgato/utils (0.6.2, checked 2026-11-13) still declares ^3.25.24, so no
+# upgrade path exists yet. The advisory concerns memory exhaustion for very large
+# collections validated by zod; here zod only sees small local Stream Deck messages.
+[[IgnoredVulns]]
+id = "GHSA-mrhx-c7xc-m3w5"
+ignoreUntil = 2027-02-11
+reason = "zod 3.25.76 via @elgato/utils 0.6.0; fix 4.6.6 is outside the SDK's zod ^3.25.24 range, no patched SDK yet (checked 2026-11-13); only small local messages are validated"
+
+# deepmerge 4.3.1 is a dev dependency of @rollup/plugin-node-resolve (build time, own
+# sources only, not shipped); the advisory has no fixed version.
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = 2027-02-11
+reason = "deepmerge 4.3.1, dev dependency of @rollup/plugin-node-resolve, build time only, not shipped; no fixed version exists"

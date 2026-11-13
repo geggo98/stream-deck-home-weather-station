@@ -1,0 +1,9 @@
+{
+	"status": "ok",
+	"time_exec": 0.01,
+	"time_server": 1700000060,
+	"body": {
+		"devices": [],
+		"user": { "administrative": { "unit": 0, "windunit": 0, "pressureunit": 0 } }
+	}
+}

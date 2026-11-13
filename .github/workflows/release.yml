@@ -1,0 +1,89 @@
+name: Release
+
+# release-please drives the whole release (see docs/PUBLISHING.md):
+#   1. Every push to main opens/updates a "release" PR that maintains CHANGELOG.md
+#      and bumps the version in package.json + package-lock.json from the
+#      Conventional Commits. The Stream Deck manifest's 4-part Version is derived
+#      from package.json at build time (scripts/sync-manifest-version.ts), not
+#      bumped by release-please.
+#   2. Merging that PR makes release-please create the vX.Y.Z tag + GitHub Release;
+#      the publish job then builds and attaches the .streamDeckPlugin file.
+# Distribution is GitHub Releases only (docs/PUBLISHING.md explains why).
+on:
+  push:
+    branches: [main]
+
+# Default for every job; the two jobs below raise only what they need.
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    name: Maintain release PR / cut release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the tag and the GitHub Release
+      pull-requests: write # open and update the release PR
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - name: Run release-please
+        id: rp
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    name: Build and attach .streamDeckPlugin
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # upload the release asset
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Build the tagged release, not whatever main has moved on to since: release-please
+          # tagged the merge commit, later pushes may already be on main.
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+            experimental-features = nix-command flakes
+
+      - name: Set up Cachix (devenv binary cache, read-only)
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: devenv
+
+      - name: Install devenv (pinned)
+        # The devenv CLI at the commit of release v2.4.0 (resolved with `git ls-remote`;
+        # `nix eval` of its `devenv.version` prints 2.4.0), not a floating nixpkgs ref. The
+        # tool versions the CLI then builds come from devenv.lock, which pins nixpkgs and
+        # git-hooks. Update both together: bump this commit, then `devenv update`.
+        run: nix profile add github:cachix/devenv/b904dcb51fe48c30db250038241507f60752f222#devenv
+
+      - name: Build, validate, pack (through devenv)
+        run: |
+          devenv shell -- bash -ceuo pipefail '
+            npm ci
+            npm run typecheck
+            npm run build
+            npm test
+            npm run validate
+            npm run pack
+          '
+
+      - name: Attach .streamDeckPlugin to the release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release upload "$TAG_NAME" ./*.streamDeckPlugin --clobber

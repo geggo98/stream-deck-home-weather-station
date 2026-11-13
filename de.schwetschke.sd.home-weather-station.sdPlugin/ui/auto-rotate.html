@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<title>Auto Rotate Settings</title>
+	<meta charset="utf-8" />
+	<meta http-equiv="Content-Security-Policy"
+		content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ws://127.0.0.1:* ws://localhost:*; base-uri 'none'; form-action 'none'" />
+	<script src="vendor/sdpi-components.js"></script>
+	<script src="home-weather-pi.js"></script>
+	<link rel="stylesheet" href="home-weather-pi.css" />
+</head>
+
+<body>
+	<p class="pi-hint">
+		Press the key to switch the rotation on or off. While it is on, the focus steps to the next
+		measurement of the focused sensor at the interval below. The timer only runs while this key is
+		visible and switched on.
+	</p>
+	<sdpi-item label="Interval">
+		<sdpi-range setting="autoRotateSeconds" min="3" max="60" step="1" default="8" showlabels></sdpi-range>
+	</sdpi-item>
+	<p class="pi-hint">Seconds between steps, 3 to 60.</p>
+	<sdpi-item label="Start on">
+		<sdpi-checkbox setting="autoRotateStartOn" label="Start rotating when Stream Deck starts"></sdpi-checkbox>
+	</sdpi-item>
+
+	<div class="sdpi-divider" style="margin: 16px 0;"></div>
+
+	<section id="account">
+		<div class="pi-account-title">Weather station account</div>
+		<p id="accountStatus" class="pi-status pi-status-unknown" role="status">Waiting for the plugin&hellip;</p>
+
+		<sdpi-item label="Client ID">
+			<input id="clientId" class="pi-input" type="text" autocomplete="off" spellcheck="false" />
+		</sdpi-item>
+		<sdpi-item label="Client secret">
+			<input id="clientSecret" class="pi-input" type="password" autocomplete="off" spellcheck="false" />
+		</sdpi-item>
+		<sdpi-item label="Refresh token">
+			<input id="refreshToken" class="pi-input" type="password" autocomplete="off" spellcheck="false" />
+		</sdpi-item>
+
+		<div class="pi-buttons">
+			<button id="saveCredentials" class="pi-button" type="button">Save and test</button>
+			<button id="clearCredentials" class="pi-button" type="button">Clear</button>
+			<button id="refreshNow" class="pi-button" type="button">Refresh now</button>
+		</div>
+		<p id="accountResult" class="pi-hint" role="status"></p>
+
+		<p class="pi-hint">
+			Create your own app in the Netatmo developer portal, scope read_station, generate or authorise a
+			token pair, and paste the values here. They stay on this computer.
+		</p>
+
+		<details id="browserLoginBox" class="pi-details">
+			<summary>Sign in with browser (experimental)</summary>
+			<p class="pi-hint">
+				Experimental and not verified against the real service. Enter the Client ID and Client secret
+				above, then press the button. This address is shown, and it must be registered as a redirect
+				URI in your app before the sign-in can succeed. Register it, then press the button again.
+			</p>
+			<div id="redirectUri" class="pi-code">Shown after the first press.</div>
+			<div class="pi-buttons">
+				<button id="startBrowserLogin" class="pi-button" type="button">Sign in with browser</button>
+			</div>
+			<p id="browserLoginResult" class="pi-hint" role="status"></p>
+		</details>
+
+		<div class="pi-account-title">Plugin settings</div>
+		<sdpi-item label="Update interval">
+			<select id="pollInterval" class="pi-input">
+				<option value="60">1 min</option>
+				<option value="300" selected>5 min</option>
+				<option value="600">10 min</option>
+				<option value="1800">30 min</option>
+				<option value="3600">60 min</option>
+			</select>
+		</sdpi-item>
+		<p class="pi-hint">
+			Netatmo refreshes station data about every 10 minutes, so shorter intervals mostly cost API budget.
+			This applies to all keys and dials.
+		</p>
+		<sdpi-item label="Default units">
+			<select id="globalUnits" class="pi-input">
+				<option value="account" selected>Follow account</option>
+				<option value="metric">Metric</option>
+				<option value="imperial">Imperial</option>
+			</select>
+		</sdpi-item>
+		<p class="pi-hint">Used by every key whose own Units setting is Automatic.</p>
+
+		<p class="pi-hint pi-notice">Unofficial plugin, not affiliated with Netatmo, Elgato or Corsair.</p>
+	</section>
+
+	<script src="init/auto-rotate.js"></script>
+</body>
+
+</html>

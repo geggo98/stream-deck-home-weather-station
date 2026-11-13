@@ -1,0 +1,23 @@
+{
+	"_note": "SPEC-DERIVED shape (docs/WEATHER-API.md, getmeasure), NOT captured from the live service. Values are invented. Same series as the sibling measure-*.json file.",
+	"status": "ok",
+	"time_exec": 0.01,
+	"time_server": 1700000100,
+	"body": {
+		"1699988200": [
+			9.8
+		],
+		"1699991800": [
+			10.1
+		],
+		"1699993600": [
+			10.4
+		],
+		"1699997200": [
+			11
+		],
+		"1699999000": [
+			11.3
+		]
+	}
+}

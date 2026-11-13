@@ -1,0 +1,16 @@
+# gitleaks configuration (used by the pre-commit hook in devenv.nix via --config).
+#
+# Default rules stay on. The only exception: the deliberately fake, recognisable secrets
+# that two tests feed through the logger and the redactor to prove they get masked. Such a
+# test needs a value that looks like a credential, so the scanner flags it as
+# "generic-api-key". The exception needs BOTH conditions: the file is one of those two
+# tests AND the flagged text is one of those fixed sentinels. A real-looking token anywhere
+# else, or a different token inside these files, is still reported.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "fake sentinel secrets in the redaction and no-secret-logging tests"
+condition = "AND"
+paths = ['''^tests/station-(?:no-secret-logging|redact)\.test\.ts$''']
+regexes = ['''(?:(?:CS|RT|AT)-distinctive-[A-Za-z0-9-]+|s3cr3t/with\+chars==)''']

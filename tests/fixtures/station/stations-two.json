@@ -1,0 +1,151 @@
+{
+	"_note": "SYNTHETIC two-station fixture (fictional ids from the documentation range 00:00:5e:00:53:xx); not captured from a live service.",
+	"status": "ok",
+	"time_exec": 0.05,
+	"time_server": 1700000060,
+	"body": {
+		"devices": [
+			{
+				"_id": "00:00:5e:00:53:11",
+				"type": "NAMain",
+				"module_name": "Living room",
+				"home_name": "Test Home",
+				"firmware": 140,
+				"wifi_status": 60,
+				"reachable": true,
+				"co2_calibrating": false,
+				"data_type": [
+					"Temperature",
+					"CO2",
+					"Humidity",
+					"Noise",
+					"Pressure"
+				],
+				"dashboard_data": {
+					"time_utc": 1700000000,
+					"Temperature": 21.4,
+					"CO2": 612,
+					"Humidity": 45,
+					"Noise": 38,
+					"Pressure": 1013.2,
+					"AbsolutePressure": 998.7,
+					"min_temp": 19.8,
+					"max_temp": 22.1,
+					"date_min_temp": 1699990000,
+					"date_max_temp": 1699999000,
+					"temp_trend": "stable",
+					"pressure_trend": "up"
+				},
+				"modules": [
+					{
+						"_id": "00:00:5e:00:53:12",
+						"type": "NAModule1",
+						"module_name": "Garden",
+						"firmware": 50,
+						"last_message": 1700000000,
+						"last_seen": 1700000000,
+						"rf_status": 62,
+						"battery_vp": 5600,
+						"battery_percent": 87,
+						"reachable": true,
+						"data_type": [
+							"Temperature",
+							"Humidity"
+						],
+						"dashboard_data": {
+							"time_utc": 1699999990,
+							"Temperature": 9.6,
+							"Humidity": 81,
+							"min_temp": 6.2,
+							"max_temp": 11,
+							"date_min_temp": 1699980000,
+							"date_max_temp": 1699995000,
+							"temp_trend": "down"
+						}
+					},
+					{
+						"_id": "00:00:5e:00:53:13",
+						"type": "NAModule2",
+						"module_name": "Anemometer",
+						"rf_status": 70,
+						"battery_percent": 64,
+						"reachable": true,
+						"data_type": [
+							"Wind"
+						],
+						"dashboard_data": {
+							"time_utc": 1699999995,
+							"WindStrength": 14,
+							"WindAngle": 250,
+							"GustStrength": 27,
+							"GustAngle": 262,
+							"max_wind_str": 31,
+							"max_wind_angle": 240,
+							"date_max_wind_str": 1699990500
+						}
+					},
+					{
+						"_id": "00:00:5e:00:53:14",
+						"type": "NAModule3",
+						"module_name": "Rain gauge",
+						"rf_status": 66,
+						"battery_percent": 92,
+						"reachable": true,
+						"data_type": [
+							"Rain"
+						],
+						"dashboard_data": {
+							"time_utc": 1699999980,
+							"Rain": 0.3,
+							"sum_rain_1": 0.5,
+							"sum_rain_24": 4.2
+						}
+					}
+				]
+			},
+			{
+				"_id": "00:00:5e:00:53:21",
+				"type": "NAMain",
+				"module_name": "Cabin",
+				"home_name": "Second Test Home",
+				"firmware": 140,
+				"wifi_status": 60,
+				"reachable": true,
+				"co2_calibrating": false,
+				"data_type": [
+					"Temperature",
+					"CO2",
+					"Humidity",
+					"Noise",
+					"Pressure"
+				],
+				"dashboard_data": {
+					"time_utc": 1700000000,
+					"Temperature": 17.3,
+					"CO2": 480,
+					"Humidity": 61,
+					"Noise": 38,
+					"Pressure": 1013.2,
+					"AbsolutePressure": 998.7,
+					"min_temp": 19.8,
+					"max_temp": 22.1,
+					"date_min_temp": 1699990000,
+					"date_max_temp": 1699999000,
+					"temp_trend": "stable",
+					"pressure_trend": "up"
+				},
+				"modules": []
+			}
+		],
+		"user": {
+			"administrative": {
+				"unit": 0,
+				"windunit": 0,
+				"pressureunit": 0,
+				"feel_like_algo": 0,
+				"lang": "en-GB",
+				"reg_locale": "en-GB"
+			}
+		}
+	}
+}

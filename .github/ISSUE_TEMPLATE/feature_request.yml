@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest a metric, a display option or an improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is a free, non-commercial hobby project. Requests that would require commercial use of the weather API,
+        advertising, a paid tier or donation links cannot be accepted (see docs/BRANDING.md).
+        Do not paste tokens, station ids, coordinates or unredacted logs here.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to see, and why?
+    validations:
+      required: true

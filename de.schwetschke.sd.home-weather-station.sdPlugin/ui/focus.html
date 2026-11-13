@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<title>Focus Settings</title>
+	<meta charset="utf-8" />
+	<meta http-equiv="Content-Security-Policy"
+		content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ws://127.0.0.1:* ws://localhost:*; base-uri 'none'; form-action 'none'" />
+	<script src="vendor/sdpi-components.js"></script>
+	<script src="home-weather-pi.js"></script>
+	<link rel="stylesheet" href="home-weather-pi.css" />
+</head>
+
+<body>
+	<p class="pi-hint">
+		Shows the value that the plugin-wide focus points at: one station, one sensor, one measurement.
+		The navigation keys (next value, next sensor, next station) move the focus, and every
+		focus display, dial and history key that follows the focus repaints. Press this key to fetch the
+		newest data from the cloud (at most once a minute).
+	</p>
+	<p class="pi-hint">
+		The other keys of this group need no settings, they only move the focus or fetch data:
+		<strong>Reload</strong> fetches the newest cloud data (it cannot make the station measure; at most once a minute),
+		<strong>Next / previous value</strong> steps through the measurements of the focused sensor,
+		<strong>Next / previous sensor</strong> shows the same measurement on the next sensor (dimmed when no other sensor reports it),
+		<strong>Next / previous station</strong> switches the station (dimmed when there is only one).
+		The settings below apply to the focus display.
+	</p>
+
+	<sdpi-item label="Units">
+		<sdpi-select setting="unitSystem" default="auto">
+			<option value="auto">Automatic (follow the account)</option>
+			<option value="metric">Metric</option>
+			<option value="imperial">Imperial</option>
+		</sdpi-select>
+	</sdpi-item>
+
+
+	<sdpi-item label="Trend">
+		<sdpi-checkbox setting="showTrend" label="Show trend arrow"></sdpi-checkbox>
+	</sdpi-item>
+	<sdpi-item label="Min / max">
+		<sdpi-checkbox setting="showMinMax" label="Show today's minimum and maximum"></sdpi-checkbox>
+	</sdpi-item>
+	<p class="pi-hint">Only available for measurements that have a trend or a minimum and maximum.</p>
+
+	<p class="pi-hint">
+		This key always follows the focus, so there is no module or measurement to choose here.
+	</p>
+
+<p class="pi-hint">
+		Alert thresholds are not offered here: this key follows the focus, and one number cannot fit every
+		measurement. Thresholds only apply to fixed keys (a measurement key with Follow focus cleared).
+	</p>
+
+	<div class="sdpi-divider" style="margin: 16px 0;"></div>
+
+	<section id="account">
+		<div class="pi-account-title">Weather station account</div>
+		<p id="accountStatus" class="pi-status pi-status-unknown" role="status">Waiting for the plugin&hellip;</p>
+
+		<sdpi-item label="Client ID">
+			<input id="clientId" class="pi-input" type="text" autocomplete="off" spellcheck="false" />
+		</sdpi-item>
+		<sdpi-item label="Client secret">
+			<input id="clientSecret" class="pi-input" type="password" autocomplete="off" spellcheck="false" />
+		</sdpi-item>
+		<sdpi-item label="Refresh token">
+			<input id="refreshToken" class="pi-input" type="password" autocomplete="off" spellcheck="false" />
+		</sdpi-item>
+
+		<div class="pi-buttons">
+			<button id="saveCredentials" class="pi-button" type="button">Save and test</button>
+			<button id="clearCredentials" class="pi-button" type="button">Clear</button>
+			<button id="refreshNow" class="pi-button" type="button">Refresh now</button>
+		</div>
+		<p id="accountResult" class="pi-hint" role="status"></p>
+
+		<p class="pi-hint">
+			Create your own app in the Netatmo developer portal, scope read_station, generate or authorise a
+			token pair, and paste the values here. They stay on this computer.
+		</p>
+
+		<details id="browserLoginBox" class="pi-details">
+			<summary>Sign in with browser (experimental)</summary>
+			<p class="pi-hint">
+				Experimental and not verified against the real service. Enter the Client ID and Client secret
+				above, then press the button. This address is shown, and it must be registered as a redirect
+				URI in your app before the sign-in can succeed. Register it, then press the button again.
+			</p>
+			<div id="redirectUri" class="pi-code">Shown after the first press.</div>
+			<div class="pi-buttons">
+				<button id="startBrowserLogin" class="pi-button" type="button">Sign in with browser</button>
+			</div>
+			<p id="browserLoginResult" class="pi-hint" role="status"></p>
+		</details>
+
+		<div class="pi-account-title">Plugin settings</div>
+		<sdpi-item label="Update interval">
+			<select id="pollInterval" class="pi-input">
+				<option value="60">1 min</option>
+				<option value="300" selected>5 min</option>
+				<option value="600">10 min</option>
+				<option value="1800">30 min</option>
+				<option value="3600">60 min</option>
+			</select>
+		</sdpi-item>
+		<p class="pi-hint">
+			Netatmo refreshes station data about every 10 minutes, so shorter intervals mostly cost API budget.
+			This applies to all keys and dials.
+		</p>
+		<sdpi-item label="Default units">
+			<select id="globalUnits" class="pi-input">
+				<option value="account" selected>Follow account</option>
+				<option value="metric">Metric</option>
+				<option value="imperial">Imperial</option>
+			</select>
+		</sdpi-item>
+		<p class="pi-hint">Used by every key whose own Units setting is Automatic.</p>
+
+		<p class="pi-hint pi-notice">Unofficial plugin, not affiliated with Netatmo, Elgato or Corsair.</p>
+	</section>
+
+	<script src="init/focus.js"></script>
+</body>
+
+</html>

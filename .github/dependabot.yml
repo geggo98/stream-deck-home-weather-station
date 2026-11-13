@@ -1,0 +1,68 @@
+version: 2
+updates:
+  # Keep GitHub Actions pinned to fresh commit SHAs (the `# vX.Y.Z` comments
+  # pinact writes are read by Dependabot to track the underlying version).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    # Wait 14 days after a release before proposing it (let early regressions
+    # surface first).
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: ci
+    # One combined PR per run instead of one per action.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # npm dependencies.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    # Wait 14 days after a release before proposing it.
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: build
+      prefix-development: build
+    # Keep @types/node aligned with the Node 24 plugin runtime (manifest
+    # Nodejs.Version = 24); don't propose @types/node 25+ majors. 24.x
+    # minor/patch updates are still allowed.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 type-checks this project cleanly [carried over from the sibling
+      # project this repo was derived from; not re-run here], but `rollup -c` dies in
+      # @rollup/plugin-typescript with "Cannot read properties of undefined (reading
+      # 'ES2015')": typescript@7 exports no compiler API from its package root (only
+      # `./unstable/*` subpaths), while the plugin destructures `ModuleKind` & friends
+      # from a bare `import ... from "typescript"`. Re-checked on 2026-11-13 WITHOUT
+      # running a build: the upstream request for TypeScript 7 support
+      # (rollup/plugins#2016) is still open, and the newest plugin release 12.3.1
+      # (2026-10-21) lists only a watch-mode bugfix in its changelog. `npm view
+      # typescript version` shows 7.0.2 as latest, so the weekly proposal would exist
+      # and would be unmergeable.
+      #
+      # REMOVE THIS RULE when the plugin's changelog or README announces TypeScript 7
+      # support, or when rollup.config.mjs no longer uses @rollup/plugin-typescript.
+      # NOT a signal: "any new plugin version" (12.3.1 already appeared and changed
+      # nothing for TS 7), and not the peer range (`typescript: ">=3.7.0"` already
+      # admits 7.x while the plugin crashes on import).
+      #
+      # Then verify with `npm run build`, NOT `npm run typecheck`: the type check stays
+      # green through this whole outage and proves nothing here.
+      #
+      # Known cost: pins us to the 6.x line and would swallow a future TypeScript 8 too.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+    # One combined PR per run instead of one per package. Security updates are
+    # not grouped (groups apply to version updates), so fixes still arrive
+    # individually and promptly.
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"

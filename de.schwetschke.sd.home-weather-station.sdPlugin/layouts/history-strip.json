@@ -1,0 +1,8 @@
+{
+	"id": "de.schwetschke.sd.home-weather-station.history-strip",
+	"items": [
+		{ "key": "title", "type": "text", "rect": [8, 2, 184, 20], "font": { "size": 14 }, "alignment": "left" },
+		{ "key": "chart", "type": "pixmap", "rect": [8, 24, 184, 52] },
+		{ "key": "value", "type": "text", "rect": [8, 78, 184, 20], "font": { "size": 14 }, "alignment": "center" }
+	]
+}

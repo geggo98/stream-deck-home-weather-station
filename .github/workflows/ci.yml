@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least privilege: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    # Ubuntu AND macOS, both through devenv so the toolchain (node, tsx, pinact,
+    # osv-scanner) is identical. macOS is in the matrix for one concrete reason: the
+    # plugin keeps its OAuth credentials in a 0600 file under a per-OS data directory
+    # (SECURITY.md), and path/permission behaviour differs there. Public
+    # repositories do not pay the macOS minute multiplier [unverified for this repo
+    # until it is public]. Windows is NOT covered: file modes are not enforced there
+    # and nobody has run the suite on it.
+    name: Build, test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+            experimental-features = nix-command flakes
+
+      - name: Set up Cachix (devenv binary cache, read-only)
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: devenv
+
+      - name: Install devenv (pinned)
+        # The devenv CLI at the commit of release v2.4.0 (resolved with `git ls-remote`;
+        # `nix eval` of its `devenv.version` prints 2.4.0), not a floating nixpkgs ref. The
+        # tool versions the CLI then builds come from devenv.lock, which pins nixpkgs and
+        # git-hooks. Update both together: bump this commit, then `devenv update`.
+        run: nix profile add github:cachix/devenv/b904dcb51fe48c30db250038241507f60752f222#devenv
+
+      - name: Typecheck, build, test, validate, pack (through devenv)
+        run: |
+          devenv shell -- bash -ceuo pipefail '
+            npm ci
+            npm run typecheck
+            npm run build
+            npm test
+            npm run validate
+            npm run pack
+          '
+
+      - name: Upload plugin bundle
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: streamdeck-plugin
+          path: "*.streamDeckPlugin"
+          if-no-files-found: error
+          retention-days: 14
+
+  security:
+    name: Action pins + vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+            experimental-features = nix-command flakes
+
+      - name: Set up Cachix (devenv binary cache, read-only)
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: devenv
+
+      - name: Install devenv (pinned)
+        # The devenv CLI at the commit of release v2.4.0 (resolved with `git ls-remote`;
+        # `nix eval` of its `devenv.version` prints 2.4.0), not a floating nixpkgs ref. The
+        # tool versions the CLI then builds come from devenv.lock, which pins nixpkgs and
+        # git-hooks. Update both together: bump this commit, then `devenv update`.
+        run: nix profile add github:cachix/devenv/b904dcb51fe48c30db250038241507f60752f222#devenv
+
+      - name: Verify all GitHub Actions are pinned to a commit SHA
+        # pinact resolves tags through the GitHub API, hence the token; the
+        # workflow token is read-only here.
+        run: devenv shell -- pinact run --check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: osv-scanner (vulnerabilities, gates the build)
+        run: devenv shell -- npm run scan:vulns
+
+      - name: osv-scanner (license report, informational)
+        # --licenses queries the external deps.dev service, which is intermittently
+        # unavailable; the gating scan above does not touch it.
+        continue-on-error: true
+        run: devenv shell -- npm run scan

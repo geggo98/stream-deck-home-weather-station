@@ -1,0 +1,17 @@
+# Files excluded from the packed .streamDeckPlugin bundle (syntax mirrors .gitignore).
+# Keeps a local `npm run pack` identical to a clean CI checkout.
+
+# Source maps (emitted only by `npm run watch`)
+**/*.map
+
+# devenv / direnv / Stream Deck CLI caches
+.devenv/
+.direnv/
+.cache/
+
+# Runtime logs written by the plugin
+logs/
+
+# OS cruft
+.DS_Store
+**/.DS_Store

@@ -1,0 +1,158 @@
+/*
+ * Shared Property Inspector styling.
+ *
+ * sdpi-components themes its own components only. Plain text in a Property
+ * Inspector inherits the document default, which is BLACK on Stream Deck's dark
+ * panel, and the webview's default font is Times New Roman. So every plain
+ * element below states its colour and the body states sdpi's font stack.
+ * Never dim text with `opacity`: black on dark at 60 % is invisible, not
+ * "secondary".
+ */
+
+body {
+	font-family: "Segoe UI", Arial, Roboto, "Helvetica sans-serif", "Apple Color Emoji", "Segoe UI Emoji",
+		"Segoe UI Symbol";
+}
+
+/* Secondary explanatory text, roughly 9:1 against the panel. */
+.pi-hint {
+	color: #c8c8c8;
+	font-size: 12px;
+	margin: 8px 4px 2px;
+	line-height: 1.35;
+}
+
+/* A hint that reports a problem the user has to act on. */
+.pi-warn {
+	color: #f5a623;
+	font-size: 12px;
+	margin: 4px 4px 2px;
+	line-height: 1.35;
+}
+
+.pi-hidden {
+	display: none;
+}
+
+/* ---- Account block (identical in every Property Inspector) ---- */
+
+.pi-account-title {
+	color: #d8d8d8;
+	font-size: 13px;
+	font-weight: 600;
+	margin: 12px 4px 6px;
+}
+
+/* One line of state text. The colour carries the state, the words say it too,
+   so the line does not rely on colour alone. */
+.pi-status {
+	font-size: 12px;
+	line-height: 1.35;
+	margin: 4px 4px 8px;
+	padding: 4px 8px;
+	border-radius: 4px;
+	border-left: 4px solid #8a8a8a;
+	background: #333333;
+	color: #d8d8d8;
+}
+
+.pi-status-ok {
+	border-left-color: #5fbf7f;
+	color: #a9e3bb;
+}
+
+.pi-status-warn {
+	border-left-color: #f5a623;
+	color: #f5c26b;
+}
+
+.pi-status-error {
+	border-left-color: #ef6a5a;
+	color: #ff9e92;
+}
+
+.pi-status-unknown {
+	border-left-color: #8a8a8a;
+	color: #d0d0d0;
+}
+
+/* Plain inputs, matched to the sdpi fields next to them. */
+.pi-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	box-sizing: border-box;
+	background: #3d3d3d;
+	color: #d8d8d8;
+	border: 1px solid #262626;
+	border-radius: 4px;
+	padding: 3px 6px;
+	font-size: 12px;
+}
+
+.pi-input::placeholder {
+	color: #9a9a9a;
+}
+
+.pi-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 8px 4px 4px;
+}
+
+.pi-button {
+	background: #3d3d3d;
+	color: #d8d8d8;
+	border: 1px solid #262626;
+	border-radius: 4px;
+	padding: 4px 10px;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.pi-button:hover:not(:disabled) {
+	background: #4a4a4a;
+}
+
+.pi-button:disabled {
+	color: #8a8a8a;
+	cursor: default;
+}
+
+/* The experimental browser sign-in is collapsed by default. */
+.pi-details {
+	margin: 8px 4px 4px;
+	color: #d8d8d8;
+	font-size: 12px;
+}
+
+.pi-details summary {
+	cursor: pointer;
+	color: #d8d8d8;
+}
+
+/* The redirect URI: a click selects all of it, so it can be copied by hand. */
+.pi-code {
+	font-family: monospace;
+	font-size: 11px;
+	color: #d8d8d8;
+	background: #333333;
+	border-radius: 4px;
+	padding: 4px 6px;
+	margin: 4px 0;
+	user-select: all;
+	-webkit-user-select: all;
+	word-break: break-all;
+}
+
+.pi-notice {
+	font-size: 11px;
+	color: #b0b0b0;
+	margin-top: 10px;
+}
+
+/* Trim the trailing scrollbar; the panel still scrolls with the wheel. */
+::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}

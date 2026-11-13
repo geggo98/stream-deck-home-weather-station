@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem privately
+    url: https://github.com/geggo98/stream-deck-home-weather-station/security/advisories/new
+    about: Credential leaks, token handling or log-hygiene problems. Do not open a public issue for these, see SECURITY.md.

@@ -1,0 +1,19 @@
+{
+	// Attach to the plugin process started by `npm run watch` (Nodejs.Debug "enabled"
+	// is added to the manifest locally by that script and must never be committed).
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Attach to Plugin",
+			"type": "node",
+			"request": "attach",
+			"processId": "${command:PickProcess}",
+			"outFiles": [
+				"${workspaceFolder}/de.schwetschke.sd.home-weather-station.sdPlugin/bin/**/*.js"
+			],
+			"resolveSourceMapLocations": [
+				"${workspaceFolder}/**"
+			]
+		}
+	]
+}

@@ -1,0 +1,337 @@
+{
+  "Name": "Home Weather Station",
+  "UUID": "de.schwetschke.sd.home-weather-station",
+  "Version": "0.1.0.0",
+  "Author": "Stefan Schwetschke",
+  "URL": "https://github.com/geggo98/stream-deck-home-weather-station",
+  "Description": "Shows indoor and outdoor temperature, humidity, CO2, noise, pressure, rain, wind and trends from a Netatmo weather station on your keys. Unofficial: independent project, not affiliated with or endorsed by Netatmo, Elgato or Corsair.",
+  "Icon": "imgs/plugin/plugin-icon",
+  "Category": "Home Weather Station",
+  "CategoryIcon": "imgs/plugin/category-icon",
+  "CodePath": "bin/plugin.js",
+  "Nodejs": {
+    "Version": "24"
+  },
+  "Software": {
+    "MinimumVersion": "7.1"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "12"
+    },
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "SDKVersion": 3,
+  "Actions": [
+    {
+      "Name": "Temperature",
+      "UUID": "de.schwetschke.sd.home-weather-station.temperature",
+      "Icon": "imgs/actions/temperature/icon",
+      "Tooltip": "Shows a temperature. Press to request fresh data (at most once a minute) and to see today's minimum and maximum.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "PropertyInspectorPath": "ui/measurement.html",
+      "States": [
+        {
+          "Image": "imgs/actions/temperature/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Humidity",
+      "UUID": "de.schwetschke.sd.home-weather-station.humidity",
+      "Icon": "imgs/actions/humidity/icon",
+      "Tooltip": "Shows the relative humidity. Press to request fresh data (at most once a minute).",
+      "Controllers": [
+        "Keypad"
+      ],
+      "PropertyInspectorPath": "ui/measurement.html",
+      "States": [
+        {
+          "Image": "imgs/actions/humidity/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "CO2",
+      "UUID": "de.schwetschke.sd.home-weather-station.co2",
+      "Icon": "imgs/actions/co2/icon",
+      "Tooltip": "Shows the indoor CO2 concentration. Press to request fresh data (at most once a minute).",
+      "Controllers": [
+        "Keypad"
+      ],
+      "PropertyInspectorPath": "ui/measurement.html",
+      "States": [
+        {
+          "Image": "imgs/actions/co2/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Noise",
+      "UUID": "de.schwetschke.sd.home-weather-station.noise",
+      "Icon": "imgs/actions/noise/icon",
+      "Tooltip": "Shows the indoor noise level. Press to request fresh data (at most once a minute).",
+      "Controllers": [
+        "Keypad"
+      ],
+      "PropertyInspectorPath": "ui/measurement.html",
+      "States": [
+        {
+          "Image": "imgs/actions/noise/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Pressure",
+      "UUID": "de.schwetschke.sd.home-weather-station.pressure",
+      "Icon": "imgs/actions/pressure/icon",
+      "Tooltip": "Shows the air pressure. Press to request fresh data (at most once a minute).",
+      "Controllers": [
+        "Keypad"
+      ],
+      "PropertyInspectorPath": "ui/measurement.html",
+      "States": [
+        {
+          "Image": "imgs/actions/pressure/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Rain",
+      "UUID": "de.schwetschke.sd.home-weather-station.rain",
+      "Icon": "imgs/actions/rain/icon",
+      "Tooltip": "Shows the rainfall of the last 24 hours. Press to request fresh data (at most once a minute).",
+      "Controllers": [
+        "Keypad"
+      ],
+      "PropertyInspectorPath": "ui/measurement.html",
+      "States": [
+        {
+          "Image": "imgs/actions/rain/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Wind",
+      "UUID": "de.schwetschke.sd.home-weather-station.wind",
+      "Icon": "imgs/actions/wind/icon",
+      "Tooltip": "Shows the wind speed and direction. Press to request fresh data (at most once a minute).",
+      "Controllers": [
+        "Keypad"
+      ],
+      "PropertyInspectorPath": "ui/measurement.html",
+      "States": [
+        {
+          "Image": "imgs/actions/wind/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Focus Display",
+      "UUID": "de.schwetschke.sd.home-weather-station.focus",
+      "Icon": "imgs/actions/focus/icon",
+      "Tooltip": "Shows the value of the focused sensor. Follows the focus set by the navigation keys and the dial. Press to request fresh data (at most once a minute). No alerts: a threshold fits one value, and this key changes value with the focus.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/focus/key",
+          "TitleAlignment": "bottom"
+        }
+      ],
+      "PropertyInspectorPath": "ui/focus.html"
+    },
+    {
+      "Name": "Reload",
+      "UUID": "de.schwetschke.sd.home-weather-station.focus-refresh",
+      "Icon": "imgs/actions/focus-refresh/icon",
+      "Tooltip": "Fetches the newest data the cloud has (at most one real request per minute). It cannot make the station measure: stations upload about every 10 minutes. Shows how old the data is.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/focus-refresh/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Next Value",
+      "UUID": "de.schwetschke.sd.home-weather-station.focus-next-metric",
+      "Icon": "imgs/actions/focus-next-metric/icon",
+      "Tooltip": "Moves the focus to the next value of the same sensor (for example temperature, then humidity). Shows which value comes next.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/focus-next-metric/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Previous Value",
+      "UUID": "de.schwetschke.sd.home-weather-station.focus-prev-metric",
+      "Icon": "imgs/actions/focus-prev-metric/icon",
+      "Tooltip": "Moves the focus to the previous value of the same sensor. Shows which value comes before.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/focus-prev-metric/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Next Sensor",
+      "UUID": "de.schwetschke.sd.home-weather-station.focus-next-sensor",
+      "Icon": "imgs/actions/focus-next-sensor/icon",
+      "Tooltip": "Keeps the value and moves the focus to the next sensor of the station that reports it (for example indoor, then outdoor temperature). Dimmed when there is no other sensor.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/focus-next-sensor/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Previous Sensor",
+      "UUID": "de.schwetschke.sd.home-weather-station.focus-prev-sensor",
+      "Icon": "imgs/actions/focus-prev-sensor/icon",
+      "Tooltip": "Keeps the value and moves the focus to the previous sensor of the station that reports it. Dimmed when there is no other sensor.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/focus-prev-sensor/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Next Station",
+      "UUID": "de.schwetschke.sd.home-weather-station.focus-next-station",
+      "Icon": "imgs/actions/focus-next-station/icon",
+      "Tooltip": "Moves the focus to the next weather station of the account. Dimmed when the account has only one station.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/focus-next-station/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Previous Station",
+      "UUID": "de.schwetschke.sd.home-weather-station.focus-prev-station",
+      "Icon": "imgs/actions/focus-prev-station/icon",
+      "Tooltip": "Moves the focus to the previous weather station of the account. Dimmed when the account has only one station.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/focus-prev-station/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Auto Rotate",
+      "UUID": "de.schwetschke.sd.home-weather-station.auto-rotate",
+      "Icon": "imgs/actions/auto-rotate/icon",
+      "Tooltip": "Press to switch on or off: the focus then advances through the values of the focused sensor every few seconds. Off after a restart unless set to start on.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/auto-rotate/key",
+          "TitleAlignment": "bottom"
+        }
+      ],
+      "PropertyInspectorPath": "ui/auto-rotate.html"
+    },
+    {
+      "Name": "Data Age and Battery",
+      "UUID": "de.schwetschke.sd.home-weather-station.info",
+      "Icon": "imgs/actions/info/icon",
+      "Tooltip": "Shows how old the data of the focused sensor is. Press to switch to its battery level (where the sensor reports one).",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/info/key",
+          "TitleAlignment": "bottom"
+        }
+      ],
+      "PropertyInspectorPath": "ui/info.html"
+    },
+    {
+      "Name": "History",
+      "UUID": "de.schwetschke.sd.home-weather-station.history",
+      "Icon": "imgs/actions/history/icon",
+      "Tooltip": "Draws the recent course of the focused value (rain as bars). Press to switch between 6 hours, 24 hours and 3 days. Fetches history from the cloud only while visible.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/history/key",
+          "TitleAlignment": "bottom"
+        }
+      ],
+      "PropertyInspectorPath": "ui/history.html"
+    },
+    {
+      "Name": "Weather Dial",
+      "UUID": "de.schwetschke.sd.home-weather-station.weather-dial",
+      "Icon": "imgs/actions/weather-dial/icon",
+      "Tooltip": "Turn for the next value, press for the next sensor, turn while pressed for the next station. Tap the strip to request fresh data (at most once a minute), hold it for minimum and maximum or the 24 hour history.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "PropertyInspectorPath": "ui/dial.html",
+      "States": [
+        {
+          "Image": "imgs/actions/weather-dial/key",
+          "TitleAlignment": "bottom"
+        }
+      ],
+      "Encoder": {
+        "layout": "$B1",
+        "Icon": "imgs/actions/weather-dial/icon",
+        "TriggerDescription": {
+          "Push": "Next sensor",
+          "Rotate": "Next value (pressed: next station)",
+          "Touch": "Tap: reload (once a minute at most), hold: min/max or history"
+        }
+      }
+    }
+  ]
+}

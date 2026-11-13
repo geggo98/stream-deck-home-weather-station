@@ -1,0 +1,38 @@
+{
+	"_note": "SPEC-DERIVED shape (docs/WEATHER-API.md, getmeasure), NOT captured from the live service. Values are invented. Same series as the sibling measure-*.json file.",
+	"status": "ok",
+	"time_exec": 0.01,
+	"time_server": 1700000100,
+	"body": [
+		{
+			"beg_time": 1699988200,
+			"step_time": 1800,
+			"value": [
+				[
+					9.8
+				],
+				[
+					null
+				],
+				[
+					10.1
+				],
+				[
+					10.4
+				]
+			]
+		},
+		{
+			"beg_time": 1699997200,
+			"step_time": 1800,
+			"value": [
+				[
+					11
+				],
+				[
+					11.3
+				]
+			]
+		}
+	]
+}

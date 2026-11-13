@@ -1,0 +1,49 @@
+{
+	"status": "ok",
+	"time_exec": 0.04,
+	"time_server": 1700000060,
+	"body": {
+		"devices": [
+			{
+				"_id": "00:00:5e:00:53:11",
+				"type": "NAMain",
+				"module_name": "Hall",
+				"station_name": "Test Station",
+				"reachable": true,
+				"dashboard_data": {
+					"time_utc": 1700000000,
+					"Temperature": 20.5,
+					"Humidity": 40,
+					"CO2": 700,
+					"Noise": 35,
+					"Pressure": 1008.0,
+					"AbsolutePressure": 1001.0
+				},
+				"modules": [
+					{
+						"_id": "00:00:5e:00:53:12",
+						"type": "NAModule1",
+						"module_name": "Terrace",
+						"reachable": false,
+						"battery_percent": 12
+					},
+					{
+						"_id": "00:00:5e:00:53:13",
+						"type": "NAModule9",
+						"module_name": "Future gadget",
+						"reachable": true,
+						"dashboard_data": { "time_utc": 1700000000, "Temperature": 1 }
+					}
+				]
+			}
+		],
+		"user": {
+			"administrative": {
+				"unit": 1,
+				"windunit": 3,
+				"pressureunit": 1,
+				"reg_locale": "de_DE"
+			}
+		}
+	}
+}
