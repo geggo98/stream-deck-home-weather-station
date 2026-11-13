@@ -6,14 +6,16 @@
  * inside a plausible range is dropped rather than shown. Personal data in the response
  * (`user.mail`, `place`, `home_id`) is never copied.
  *
- * Decision: Pressure vs AbsolutePressure. The OpenAPI document describes `Pressure` as
- * "surface pressure" and `AbsolutePressure` as "sea-level pressure"; both research reports
- * flag these descriptions as probably swapped, and that is UNVERIFIED. We therefore map the
- * KEYS one-to-one (`Pressure` -> `pressure`, `AbsolutePressure` -> `absolutePressure`) and
- * make no claim in code about which is which. Home Assistant also exposes `Pressure` only.
- * The UI labels `pressure` as the primary pressure; `scripts/probe-api.ts` reports from a
- * real response which of the two is the larger one, which settles the question for an
- * elevated station. If the live answer contradicts the label, swap the two keys HERE.
+ * Pressure vs AbsolutePressure. The OpenAPI document describes `Pressure` as "surface
+ * pressure" and `AbsolutePressure` as "sea-level pressure". The live probe of 2026-11-13
+ * (`scripts/probe-api.ts`, one account with one elevated station; docs/WEATHER-API.md) found
+ * `Pressure` LARGER than `AbsolutePressure`, so the spec text is swapped: `Pressure` is the
+ * sea-level (reduced) pressure and `AbsolutePressure` the station-level pressure. Verified by
+ * that one station only, but physically unambiguous (above sea level the reduced value is
+ * always the larger one). The KEYS map one-to-one (`Pressure` -> `pressure`,
+ * `AbsolutePressure` -> `absolutePressure`); the UI labels them "Pressure" and
+ * "Station pressure" (src/render/metrics.ts). Home Assistant exposes `Pressure` only. Should a probe
+ * of another station ever report the opposite, swap the two keys HERE.
  */
 
 import { truncateForLog } from "../logging.ts";

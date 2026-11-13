@@ -150,10 +150,13 @@ export interface HistoryRequest {
 
 export interface HistoryPoint {
 	/**
-	 * Epoch milliseconds exactly as the API reports it. With real_time=false the OpenAPI spec
-	 * documents this as the MIDDLE of the bucket ("offset + scale/2"; UNVERIFIED live, see
-	 * docs/WEATHER-API.md). A consumer must treat the bucket as [t - stepMs/2, t + stepMs/2),
-	 * so the newest point may lie up to stepMs/2 after the request's end time.
+	 * Epoch milliseconds exactly as the API reports it. With real_time=false that is the MIDDLE
+	 * of the bucket ("offset + scale/2" in the OpenAPI spec; confirmed by the live probe of
+	 * 2026-11-13 for scale 30min, one account with one station: first point date_begin + 900 s,
+	 * last date_end - 900 s; other scales not probed, see docs/WEATHER-API.md). A consumer
+	 * must treat the bucket as [t - stepMs/2, t + stepMs/2), and must still allow the newest
+	 * point to lie up to stepMs/2 after the request's end time (the probe did not see that,
+	 * but one run does not prove the alignment).
 	 */
 	readonly t: number;
 	/** Native (metric) unit, like MetricValues. For rain: mm per bucket (sum). */

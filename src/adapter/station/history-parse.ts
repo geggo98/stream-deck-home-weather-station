@@ -1,8 +1,11 @@
 /**
  * Pure helpers for the history key: request mapping and strict parsing of a getmeasure
  * response. No I/O, no clock. See docs/WEATHER-API.md ("Endpoint: getmeasure") for the
- * shapes; both are derived from the documentation and from pyatmo/Home Assistant code, not
- * from a captured live response (UNVERIFIED).
+ * shapes. Both were derived from the documentation and from pyatmo/Home Assistant code and
+ * then confirmed by the live probe of 2026-11-13 (`npm run probe -- --history`, one account
+ * with one station: 24 h of base-station temperature at scale 30min, 48 points in either
+ * shape). Not covered by that probe: gaps (new chunk vs `null`), a chunk without
+ * `step_time`, scale 1hour, rain and wind series.
  *
  * Two response shapes exist:
  *   optimize=true   body: [ { beg_time, step_time, value: [[v], [v], ...] }, ... ]
@@ -10,9 +13,9 @@
  *                   with a single value; a `null` inside `[v]` is a hole.
  *   optimize=false  body: { "<epoch seconds>": [v], ... }
  * Timestamps: `HistoryPoint.t` is the timestamp exactly as the API reports it. With
- * real_time=false the spec documents it as "offset + scale/2", the MIDDLE of the bucket
- * (UNVERIFIED against a live response; `npm run probe -- --history` prints the observed
- * offsets). The parser does not shift it. Both response shapes are accepted.
+ * real_time=false that is "offset + scale/2", the MIDDLE of the bucket (spec; the live probe
+ * saw date_begin + 900 s for the first point at scale 1800 s, and epoch seconds without an
+ * hour offset for that account's time zone). The parser does not shift it.
  * Strict means: any structural surprise (wrong type, non-finite number,
  * too many points) rejects the whole response; a finite number outside the plausible range
  * of the metric is dropped like a hole, mirroring parse.ts.
@@ -29,8 +32,10 @@ export const MAX_HISTORY_CHUNKS = 400;
 export interface MeasureSpec {
 	/**
 	 * Netatmo `type` parameter, in the spelling of the OpenAPI spec (lowercase: `temperature`,
-	 * `co2`, `windstrength`, `sum_rain`; docs/WEATHER-API.md). Whether the service also
-	 * accepts the capitalised spelling is not known and not relied on.
+	 * `co2`, `windstrength`, `sum_rain`; docs/WEATHER-API.md). The live probe of 2026-11-13
+	 * confirmed that the service accepts lowercase `temperature`; the other types were not
+	 * requested live, and whether the capitalised spelling also works was not tried and is
+	 * not relied on.
 	 */
 	readonly type: string;
 	readonly min: number;

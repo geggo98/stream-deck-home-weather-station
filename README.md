@@ -9,13 +9,20 @@
 Shows live readings from your own Netatmo weather station on Stream Deck keys and dials:
 temperature, humidity, CO2, noise, pressure, rain and wind.
 
-Status: early development. Nothing in this repository has been tested against the live
-Netatmo service or on Stream Deck hardware yet unless a section below says so. Claims that
-are not verified are marked **[unverified]**. The 24 h history key is the least verified
-part: its request and response shapes come from the public specification and its fixtures
-are invented. The `getmeasure` types it sends are the lowercase spelling of the
-specification: temperature, humidity, co2, noise, pressure, rain (as `sum_rain`, scale
-1 hour, drawn as bars) and wind (as `windstrength`); see docs/WEATHER-API.md.
+Status: early development. Nothing in this repository has been tested on Stream Deck
+hardware yet unless a section below says so. Claims that are not verified are marked
+**[unverified]**. Against the live Netatmo service this repository records one run, of the
+probe script (it uses the plugin's own client, token and parser code): on 2026-11-13 the
+maintainer ran `npm run probe -- --history` against their own account, one station with an
+outdoor module and three extra indoor modules. It confirmed the station data request, both
+response shapes of the history request (`getmeasure`) with the specification's lowercase
+type names, 48 half-hour points for 24 h, timestamps in the middle of each bucket, and which
+pressure field is the sea-level one. Not covered by that run, so still **[unverified]**:
+wind and rain history (the station has no wind or rain gauge), the 3-day window and other
+time zones, the capitalised type spelling, and Netatmo's sign-in routes (browser sign-in,
+portal token generator). The `getmeasure` types the plugin sends are: temperature, humidity,
+co2, noise, pressure, rain (as `sum_rain`, scale 1 hour, drawn as bars) and wind (as
+`windstrength`); see docs/WEATHER-API.md.
 
 ## What it does
 
@@ -83,10 +90,11 @@ hardware yet **[unverified]**.
 
 Temperature (with min/max and trend), humidity, CO2, noise, pressure (with trend), rain
 (current, last hour, last 24 hours), wind speed and direction, gust speed and direction.
-The API delivers two pressure fields; "Pressure (alt.)" is a selectable metric for the
-second one. Nobody has checked on live data which of the two is the sea-level value, so the
-labels do not claim it **[unverified]**. The metrics without a history curve are "Pressure
-(alt.)" and Gusts; the History key and the dial's history page say `No history` for them.
+The API delivers two pressure fields. "Pressure" is the sea-level (reduced) pressure that
+weather reports quote; "Station pressure" is the pressure at your station's height, lower
+the higher the station stands. The maintainer's probe of one elevated station confirmed this
+mapping (docs/WEATHER-API.md). The metrics without a history curve are "Station pressure"
+and Gusts; the History key and the dial's history page say `No history` for them.
 Healthy Home Coach and other Netatmo product lines are not supported, only the weather
 station and its modules. Units follow your Netatmo account preferences unless you override them.
 Which of these a given module delivers depends on the module type.
@@ -196,7 +204,7 @@ Use at your own risk, without warranty (see [LICENSE](LICENSE)).
 | The account status says the credentials file cannot be read | The file exists but is unreadable (permissions) or damaged. The message names the data directory. Fix the permissions or delete the file there, then sign in again. |
 | "Clear" says the credentials could not be removed | The file could not be deleted. The message gives its location; delete it by hand. Polling continues until it is gone. |
 | Save says "Saved, but ..." | The tokens were written, but the first station request failed. The text says why; when it says the token may lack `read_station`, create the token again with only that scope. |
-| History key says `No history` | No data for that sensor and window, or the metric has no history ("Pressure (alt.)" and Gusts do not). |
+| History key says `No history` | No data for that sensor and window, or the metric has no history ("Station pressure" and Gusts do not). |
 | History key says `Offline` or `Try later` | The history request failed (network or server trouble) or the request budget is used up. Failures are remembered for 30 seconds, successful results for 10 minutes; the key retries about every minute. |
 | Key says `Offline` | Nothing could be fetched yet and there is no cached data (network trouble), or the plugin has no data source. |
 | Key says `Pick module` or `No data` | A fixed key has no module chosen, or the chosen module reports nothing for that metric yet. |
@@ -277,8 +285,10 @@ secretspec run -- npm run probe
 Adding the alias alone is not enough; it does not select a provider. Inside `devenv shell`
 the variables are not set automatically, always go through `secretspec run --`.
 
-The probe and fixture scripts have not been run against the live service by the authors of
-this repository snapshot. Because Netatmo rotates refresh tokens, a probe run consumes the
+The maintainer ran the probe once against the live service (2026-11-13, with `--history`,
+one account with one station; results in docs/WEATHER-API.md); the refresh worked and the
+rotated token was written back through `secretspec set`. The fixture script has not been run
+on a live capture yet. Because Netatmo rotates refresh tokens, a probe run consumes the
 token it uses; the script writes the new one back through `secretspec set`.
 
 Architecture and rules: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Project guide for

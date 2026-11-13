@@ -627,3 +627,65 @@ test("docs describe what the code does: info key, status rows, rotation message 
 	assert.match(sec, /osv-scanner\.toml/);
 	assert.ok(existsSync(join(root, "osv-scanner.toml")));
 });
+
+// ---- the live probe of 2026-11-13: claimed exactly as far as it reaches ----------------------
+
+test("docs carry the live-probe results, scoped to one station, and keep the rest UNVERIFIED", () => {
+	const flat = (f: string): string => readRoot(f).replace(/\s+/g, " ");
+	const api = flat("docs/WEATHER-API.md");
+	const source = "VERIFIED (live probe 2026-11-13, one account with one station)";
+	// the status column has the new source, and it is used for the rows the probe settled
+	assert.ok(api.includes(`**${source}**`), "the status legend must define the live-probe source");
+	const rows = readRoot("docs/WEATHER-API.md").split("\n").filter((l) => l.startsWith("|"));
+	const row = (re: RegExp): string => {
+		const hit = rows.filter((l) => re.test(l));
+		assert.equal(hit.length, 1, `expected exactly one table row for ${re}, saw ${hit.length} (of ${rows.length} rows)`);
+		return hit[0] ?? "";
+	};
+	assert.ok(rows.length > 40, `only ${rows.length} table rows seen, the row lookup may be blind`);
+	for (const re of [/^\| GET \(what the plugin sends\) works; POST/, /^\| Optimised shape:/, /^\| Non-optimised shape:/, /^\| 24 h at scale `30min` gives 48 points/, /^\| \*\*Timestamp meaning\.\*\*/, /^\| `date_begin`\/`date_end` are plain epoch seconds/]) {
+		assert.ok(row(re).includes(source), `${re} must cite the live probe`);
+	}
+	// the claim is scoped: no "verified" without "one station" for the probe, and the open questions stay open
+	assert.doesNotMatch(api, /Nothing in this (file|section) (has been|was) confirmed with an authenticated request/);
+	assert.doesNotMatch(row(/^\| GET \(what the plugin sends\)/), /UNVERIFIED/);
+	assert.match(row(/^\| A new chunk starts after a gap/), /UNVERIFIED/);
+	assert.match(row(/^\| `null` cells occur/), /UNVERIFIED/);
+	assert.match(row(/^\| `type` values are LOWERCASE/), /capitalised[^|]*not tried \(UNVERIFIED\)/);
+	assert.match(row(/^\| `date_begin`\/`date_end` are plain epoch seconds/), /other time zones were not tried \(UNVERIFIED\)/);
+	assert.match(row(/^\| Rate limits and error codes are the ones of getstationsdata/), /UNVERIFIED/);
+	assert.match(row(/^\| A loopback redirect/), /\| UNVERIFIED \|$/);
+	assert.match(row(/^\| The developer portal can generate/), /\| UNVERIFIED \(/);
+	assert.match(api, /one `NAMain` plus one `NAModule1` and three `NAModule4`/);
+	assert.match(api, /`NAModule2` \(wind\) and `NAModule3` \(rain\) were not present/);
+	assert.match(api, /omit `devices`\?\) were not seen either \(UNVERIFIED\)/);
+	assert.match(api, /`Pressure` is the sea-level \(reduced\) pressure and `AbsolutePressure` the station-level pressure/);
+	// README: what the probe confirmed, what it did not, and still no hardware claim
+	const readme = flat("README.md");
+	assert.match(readme, /Nothing in this repository has been tested on Stream Deck hardware yet/);
+	assert.match(readme, /Not covered by that run, so still \*\*\[unverified\]\*\*: wind and rain history/);
+	assert.match(readme, /Netatmo's sign-in routes \(browser sign-in, portal token generator\)/);
+	assert.doesNotMatch(readme, /least verified/);
+	assert.doesNotMatch(readme, /probe and fixture scripts have not been run against the live service/);
+	// the sign-in routes are NOT claimed: the probe started from an existing token
+	assert.match(flat("docs/SETUP.md"), /Neither route below is confirmed against the live service/);
+	assert.match(flat("docs/SETUP.md"), /both routes in section 3 stay \*\*\[unverified\]\*\*/);
+	assert.match(flat("docs/ARCHITECTURE.md"), /Bootstrap options for the refresh token, both UNVERIFIED against the live service/);
+	assert.match(flat("SECURITY.md"), /did not exercise revocation, the browser sign-in, the portal's token generator or Windows/);
+	assert.match(flat("CLAUDE.md"), /The only live API results are one probe run by the maintainer on 2026-11-13/);
+});
+
+test("the second pressure is called Station pressure everywhere, the placeholder label is gone", () => {
+	const files = ["README.md", "docs/ARCHITECTURE.md", "docs/WEATHER-API.md", "src/render/metrics.ts", "src/render/colour.ts", "src/adapter/station/parse.ts"];
+	for (const f of files) assert.doesNotMatch(readRoot(f), /Pressure \(alt\.\)|ALT_PRESSURE_COLOUR/, `${f} still uses the placeholder label`);
+	for (const f of ["README.md", "docs/ARCHITECTURE.md", "docs/WEATHER-API.md", "src/render/metrics.ts"]) {
+		assert.ok(readRoot(f).includes("Station pressure"), `${f} must name the metric "Station pressure"`);
+	}
+	// the code comments state the verified mapping instead of disowning it
+	for (const f of ["src/adapter/station/parse.ts", "src/render/metrics.ts", "src/render/colour.ts"]) {
+		const text = readRoot(f).replace(/\n\s*(?:\*|\/\/)/g, " ").replace(/\s+/g, " "); // comment text without line prefixes
+		assert.doesNotMatch(text, /neither label claims|make no claim in code|sea-level or the station-level pressure is UNVERIFIED/i, f);
+		assert.match(text, /live probe of 2026-11-13/, `${f} must cite the probe`);
+	}
+	assert.match(readRoot("src/render/colour.ts").replace(/\n\s*\*/g, " ").replace(/\s+/g, " "), /UX choice/, "the pressure bands are our choice, not a Netatmo rule");
+});

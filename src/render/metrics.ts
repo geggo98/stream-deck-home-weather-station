@@ -72,15 +72,17 @@ export const METRICS: Readonly<Record<DisplayMetricId, MetricDef>> = {
 		glyph: "gauge",
 		gauge: { min: 960, max: 1060 },
 	},
-	// Netatmo reports two pressure values per module ("Pressure" and "AbsolutePressure").
-	// Which of them is the sea-level one is UNVERIFIED (see parse.ts and docs/WEATHER-API.md),
-	// so neither label claims it. Both are shown exactly as the API delivers them; the
-	// second one has no trend (the API documents one pressure_trend and does not say
-	// which field it describes) and no colour
-	// bands (their thresholds only make sense for one kind of pressure).
+	// Netatmo reports two pressure values per base station ("Pressure" and "AbsolutePressure").
+	// The live probe of 2026-11-13 (one elevated station; docs/WEATHER-API.md) found `Pressure`
+	// larger than `AbsolutePressure`: `Pressure` is the sea-level (reduced) value, labelled
+	// plainly "Pressure" as in weather reports, and `AbsolutePressure` the pressure at the
+	// station's height, labelled "Station pressure". One station, but physically unambiguous.
+	// Both are shown exactly as the API delivers them. Station pressure has no trend (the API
+	// documents one pressure_trend and does not say which field it describes; not checked)
+	// and no colour bands (the weather-map bands only make sense at sea level).
 	absolutePressure: {
 		id: "absolutePressure",
-		label: "Pressure (alt.)",
+		label: "Station pressure",
 		kind: "pressure",
 		source: "absolutePressure",
 		glyph: "gauge",
@@ -134,7 +136,7 @@ export function gaugePercent(metric: MetricDef, value: number): number {
 
 /**
  * Which series Netatmo's getmeasure can deliver for a display metric. Metrics without an entry
- * (alternative pressure, gusts) have no history. Every rain face draws the same series: rain per bucket.
+ * (station pressure, gusts) have no history. Every rain face draws the same series: rain per bucket.
  */
 export const HISTORY_METRIC: Readonly<Partial<Record<DisplayMetricId, HistoryMetric>>> = {
 	temperature: "temperature",

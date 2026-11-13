@@ -1,5 +1,5 @@
 {
-	"_note": "SPEC-DERIVED shape (docs/WEATHER-API.md, getmeasure), NOT captured from the live service. Values are invented. Same series as the sibling measure-*.json file.",
+	"_note": "SPEC-DERIVED shape (docs/WEATHER-API.md, getmeasure), NOT captured from the live service; the live probe of 2026-11-13 confirmed the basic shape (it saw no gaps or nulls), no data was copied. Values are invented. Same series as the sibling measure-*.json file.",
 	"status": "ok",
 	"time_exec": 0.01,
 	"time_server": 1700000100,

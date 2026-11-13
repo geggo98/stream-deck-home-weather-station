@@ -143,9 +143,14 @@ See `docs/WEATHER-API.md` for the sourced details. In short: `getstationsdata` r
 `body.devices[]` (base station `NAMain` with nested `modules[]`) and
 `body.user.administrative`; values are always metric; `time_utc` is the measurement time;
 limits are 50 requests / 10 s and 500 / h per user (stated on Netatmo's page for the Smart
-Home API; applying them to the weather API is UNVERIFIED, no live credentials were
-available). `getmeasure` is documented in the same file; its response shapes are UNVERIFIED
-against the live service.
+Home API; applying them to the weather API is UNVERIFIED). `getmeasure` is documented in the
+same file. One live probe (2026-11-13, the maintainer's account with one station: base,
+one outdoor and three additional indoor modules) confirmed `getstationsdata` with GET and
+POST, both `getmeasure` response shapes with the lowercase `type`, bucket-middle timestamps
+at scale 30min, epoch seconds without an hour offset for that account's time zone, and that
+`Pressure` is the sea-level and `AbsolutePressure` the station-level pressure. Wind and rain
+modules and their history, other time zones and scales, error codes and rate limits remain
+UNVERIFIED.
 
 ## Rendering
 
@@ -240,10 +245,13 @@ Stream Deck hardware was available.
   there is no `unit` field) or an error result (`src/adapter/station/history.ts`). It calls `GET /api/getmeasure` with `device_id`
   (base station id), `module_id` (omitted for the base module), `scale` (30min for 6h/24h,
   1hour for 3d, so at most 72 points), `type`, `date_begin`/`date_end` and `optimize=true`. Response shapes and
-  units: docs/WEATHER-API.md; they are UNVERIFIED against the live service.
+  units: docs/WEATHER-API.md. Both shapes, the lowercase `type`, 48 points for 24 h and the
+  bucket-middle timestamps were confirmed by the live probe of 2026-11-13 (one account with
+  one station, base-station temperature only); scale 1hour (3d, rain), wind and rain
+  series and other time zones are UNVERIFIED.
 * Metric to type (the spec's lowercase spelling, `MEASURE_SPECS` in `history-parse.ts`):
   temperature, humidity, co2, noise, pressure as named; rain to `sum_rain` (scale 1hour,
-  drawn as bars); wind to `windstrength`. The metrics without a history are "Pressure (alt.)"
+  drawn as bars); wind to `windstrength`. The metrics without a history are "Station pressure"
   (`absolutePressure`) and Gusts; the History key and the dial page answer `No history` for
   them, and the Property Inspector's metric list for the History key offers only metrics
   that have one.

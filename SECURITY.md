@@ -3,8 +3,12 @@
 This plugin holds OAuth credentials for a Netatmo developer app and the account's token
 pair. This file states what is stored where, who can read it, and what the plugin does and
 does not defend against. **[unverified]** marks statements that need hardware, Windows or
-the live service and have not been tested there. The statements about the code were checked
-against the source.
+the live service and have not been tested there. The live service has been reached once, by
+the maintainer's probe script on 2026-11-13 (one account, structure only; see
+[docs/WEATHER-API.md](docs/WEATHER-API.md)): its token refresh worked and the rotated token
+was stored. That run did not exercise revocation, the browser sign-in, the portal's token
+generator or Windows, so those statements stay **[unverified]**. The statements about the
+code were checked against the source.
 
 ## Reporting a vulnerability
 

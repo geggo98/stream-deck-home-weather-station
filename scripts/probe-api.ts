@@ -21,19 +21,23 @@
  * feed it to `npm run capture:fixture` and delete it. A target inside the repository working
  * tree is refused unless git ignores it, and an existing file is never overwritten.
  *
- * It also checks two open questions of docs/WEATHER-API.md: whether GET and POST on
+ * It also checks two questions of docs/WEATHER-API.md: whether GET and POST on
  * getstationsdata are equivalent, and whether `Pressure` is the larger of the two pressure
- * keys (which is what sea-level reduction gives for a station above sea level).
+ * keys (which is what sea-level reduction gives for a station above sea level). The
+ * maintainer's run of 2026-11-13 (one account with one station) answered both: same
+ * structure, and `Pressure` is the sea-level value. Runs on other stations remain useful.
  *
  * `--history` additionally requests 24 h of temperature (scale 30min) for the first base
  * module, once with optimize=true and once with optimize=false, and prints structural facts
  * only: which response shape came back, number of chunks and points, step, how many null
- * holes, and a value RANGE CLASS (never a value). That settles the open getmeasure questions
- * of docs/WEATHER-API.md (shape, step_time, unit, holes) and prints the first/last timestamp
- * relative to the request (bucket start vs middle, local vs UTC; see HistoryPoint.t).
+ * holes, and a value RANGE CLASS (never a value), plus the first/last timestamp relative to
+ * the request (bucket start vs middle, local vs UTC; see HistoryPoint.t). The run of
+ * 2026-11-13 found both shapes, 48 points, bucket middles and no hour offset for that
+ * account (docs/WEATHER-API.md); other stations and time zones are still worth probing.
  *
  * Exit codes: 0 ok, 1 error (also: the rotated token could not be stored anywhere), 2 authentication error.
- * NOT run against the live service by the author of this script (no credentials available).
+ * Written without live credentials; run against the live service by the maintainer once,
+ * on 2026-11-13, with `--history` (one account with one station; docs/WEATHER-API.md).
  */
 
 import { spawnSync } from "node:child_process";
@@ -229,8 +233,9 @@ export interface MeasureRequestTimes {
 /**
  * `request` (date_begin, date_end, scale of the call) adds the observed first/last timestamp
  * RELATIVE to it, never absolute: whether the API reports the bucket start or its middle
- * ("offset + scale/2" in the spec) and whether date_begin/date_end are local or UTC is
- * UNVERIFIED (docs/WEATHER-API.md). Epoch-aligned buckets give (t - begin) mod scale = 0 for
+ * ("offset + scale/2" in the spec) and whether date_begin/date_end are local or UTC was
+ * settled for one account only (middle, no hour offset; docs/WEATHER-API.md), so the hint
+ * lines stay for other accounts. Epoch-aligned buckets give (t - begin) mod scale = 0 for
  * bucket starts and scale/2 for middles, provided date_begin itself is aligned.
  */
 export function summariseMeasure(raw: unknown, label: string, windowMs: number, request?: MeasureRequestTimes): string[] {

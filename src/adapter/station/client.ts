@@ -8,8 +8,8 @@
  *
  * Request: `GET {baseUrl}/api/getstationsdata?get_favorites=false` with
  * `Authorization: Bearer`. GET is what Netatmo's OpenAPI document specifies; pyatmo POSTs the
- * same endpoint. Equivalence is UNVERIFIED against the live service; `scripts/probe-api.ts`
- * checks both (see docs/WEATHER-API.md). `get_favorites=false`: own stations only (favourites
+ * same endpoint. The live probe of 2026-11-13 (`scripts/probe-api.ts`, one account with one
+ * station) got the same structure for both (see docs/WEATHER-API.md). `get_favorites=false`: own stations only (favourites
  * are public stations with outdoor values, a different data set).
  *
  * Error mapping (status + code, from the "general" docs page; the combinations a live

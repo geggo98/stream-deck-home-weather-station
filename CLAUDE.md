@@ -122,8 +122,12 @@ tests/*.test.ts          flat directory, so the unquoted glob stays portable
   The gitleaks hooks run through `scripts/gitleaks-local-secrets.py`, which also matches the real values of
   the git-ignored `.env.local`; never print, copy or commit those values, and never pass them on a command line.
 - Do not copy identifying data (devices, hosts, names, addresses) from the sibling project; copy patterns only.
-- Do not claim anything that was not verified. There are no live API results and no hardware results unless a doc
-  says otherwise; mark such statements **[unverified]** in docs and comments.
+- Do not claim anything that was not verified. The only live API results are one probe run by the maintainer on
+  2026-11-13 (`npm run probe -- --history`, one account with one station; rows marked "live probe" in
+  docs/WEATHER-API.md). It did not cover wind/rain modules or their history, other time zones or scales, the
+  capitalised `type` spelling or the Netatmo sign-in routes. There are no hardware results unless a doc says
+  otherwise. Mark everything else **[unverified]** in docs and comments, and never widen a "live probe" claim
+  beyond that one station.
 
 ## Working conventions
 

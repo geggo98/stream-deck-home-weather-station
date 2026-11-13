@@ -117,14 +117,15 @@ export function noiseColour(db: number): string {
 
 /**
  * Bands for the "Pressure" field in hPa: low below the first bound, high from the second.
- * The bounds are everyday weather-map values. Whether that field is the sea-level or the
- * station-level pressure is UNVERIFIED (docs/WEATHER-API.md), and for a station well above
- * sea level the colours would be off if it is the latter. "Pressure (alt.)"
- * (absolutePressure) deliberately does not use these bands.
+ * The bounds are a UX choice taken from everyday weather-map values, not a Netatmo rule.
+ * They fit because that field is the sea-level (reduced) pressure: the live probe of
+ * 2026-11-13 showed it for one elevated station (docs/WEATHER-API.md). "Station pressure"
+ * (absolutePressure) is lower the higher the station stands, so it deliberately does not
+ * use these bands.
  */
 export const PRESSURE_BANDS = [1000, 1020] as const;
-/** Fixed accent of the "Pressure (alt.)" metric: no value-dependent bands, see PRESSURE_BANDS. */
-export const ALT_PRESSURE_COLOUR = "#6FA8DC";
+/** Fixed accent of the "Station pressure" metric: no value-dependent bands, see PRESSURE_BANDS. */
+export const STATION_PRESSURE_COLOUR = "#6FA8DC";
 
 export function pressureColour(hpa: number): string {
 	if (!Number.isFinite(hpa)) return NEUTRAL_COLOUR;
@@ -166,7 +167,7 @@ export function accentFor(metric: DisplayMetricId, value: number): string {
 		case "pressure":
 			return pressureColour(value);
 		case "absolutePressure":
-			return Number.isFinite(value) ? ALT_PRESSURE_COLOUR : NEUTRAL_COLOUR;
+			return Number.isFinite(value) ? STATION_PRESSURE_COLOUR : NEUTRAL_COLOUR;
 		case "rain":
 		case "rain1h":
 		case "rain24h":

@@ -5,6 +5,10 @@ from the design in [ARCHITECTURE.md](ARCHITECTURE.md). Nobody has run this proce
 end with the finished plugin. The developer portal needs a login. The maintainer saw its
 scope selector in November 2026 (section 2); the token generator and a redirect-URI field
 were not inspected. Steps that depend on portal behaviour are marked **[unverified]**.
+The weather API itself was probed once with an existing refresh token (2026-11-13, the
+maintainer's account with one station; results in [WEATHER-API.md](WEATHER-API.md)): station
+data, history and the token refresh worked. That run says nothing about how a token is
+obtained, so both routes in section 3 stay **[unverified]**.
 
 ## 1. Why your own app
 
@@ -42,8 +46,9 @@ Netatmo uses the OAuth2 authorization-code grant: an access token (valid 3 hours
 refresh token. The plugin keeps the access token fresh itself; it only needs one valid
 refresh token to start.
 
-Neither route below has been run against the live service by anyone working on this
-project. Recommended order: try B first, fall back to A.
+Neither route below is confirmed against the live service (the probe mentioned at the top
+started from an existing token and did not test either). Recommended order: try B first,
+fall back to A.
 
 Option B, browser sign-in (experimental, **[unverified]** against the live service): the
 plugin listens on the fixed loopback port 53682, so the redirect URI is

@@ -90,6 +90,8 @@ describe("history: type table", () => {
 		// Humidity: `humidity` ... CO2: `co2` ... Pressure: `pressure` ... Noise: `noise` ...
 		// Rain: `rain`, `min_rain`, `max_rain`, `sum_rain` ... Wind: `windstrength`, `windangle`,
 		// `guststrength`, `gustangle`". The plugin sums rain per bucket, hence `sum_rain`.
+		// The live probe of 2026-11-13 (one station, docs/WEATHER-API.md) confirmed that the service
+		// accepts `temperature`; the other spellings were not requested live.
 		const types = Object.fromEntries(Object.entries(MEASURE_SPECS).map(([k, v]) => [k, v.type]));
 		assert.deepEqual(types, {
 			temperature: "temperature",
@@ -102,7 +104,7 @@ describe("history: type table", () => {
 		});
 		for (const type of Object.values(types)) assert.equal(type, type.toLowerCase());
 	});
-	it("passes timestamps through unshifted (documented as bucket middle)", () => {
+	it("passes timestamps through unshifted (the bucket middle: spec, and seen by the live probe at scale 30min)", () => {
 		const parsed = parseMeasureBody({ "1700000100": [1] }, "humidity", STEP);
 		assert.equal(parsed.points[0]!.t, 1_700_000_100_000);
 	});

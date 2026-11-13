@@ -11,10 +11,14 @@ by or sponsored by Netatmo.
 | **VERIFIED (docs)** | Read in Netatmo's own developer documentation or OpenAPI document, fetched live on 2026-11-13 |
 | **VERIFIED (probe)** | Observed in an unauthenticated probe with bogus credentials on 2026-11-13 (no personal data involved) |
 | **VERIFIED (code)** | Read in the source of Home Assistant or pyatmo (pins below); shows what works in production there, not what Netatmo promises |
-| **UNVERIFIED** | Inference, community report or general knowledge; no authenticated call to the live service was made when this was written |
+| **VERIFIED (live probe 2026-11-13, one account with one station)** | Observed by the maintainer with `npm run probe -- --history` against their own account: one station, five modules (base station, one outdoor module, three additional indoor modules; no wind gauge, no rain gauge). The probe prints structure only, no ids, names, coordinates or values. One account in one time zone: true there, not proven for every account |
+| **UNVERIFIED** | Inference, community report or general knowledge; not covered by the live probe above |
 
-**Nothing in this file has been confirmed with an authenticated request** (the authors had
-no credentials). `npm run probe` (see below) closes the main gaps when the owner runs it.
+**Authenticated evidence is limited to one live probe** (2026-11-13, the maintainer's own
+account with one station; rows marked "live probe"). Everything else in this file comes from
+documents, code of other projects or the unauthenticated probe. In particular wind and rain
+modules, other time zones, other `getmeasure` scales and all error paths were not exercised.
+`npm run probe` (see below) closes more gaps when someone with a different station runs it.
 
 Sources:
 
@@ -37,7 +41,7 @@ Sources:
 | Refresh: `grant_type=refresh_token`, `refresh_token`, `client_id`, `client_secret`. Code exchange: `grant_type=authorization_code`, `client_id`, `client_secret`, `code`, `redirect_uri`, `scope` | VERIFIED (docs) |
 | Response fields `access_token`, `refresh_token`, `expires_in` (docs example 10800 = 3 h) | VERIFIED (docs) |
 | Token format `<24 hex>\|<32 hex>` (used only as a redaction pattern) | VERIFIED (docs) |
-| The refresh token ROTATES: "former values are immediately invalidated and can't be reused" | VERIFIED (docs) |
+| The refresh token ROTATES: "former values are immediately invalidated and can't be reused" | VERIFIED (docs). A live refresh with these parameters worked and the probe stored the rotated token: VERIFIED (live probe 2026-11-13, one account with one station). That the OLD token is then rejected was not tried |
 | Rotation became effective 2023-04-17 (community-quoted notice) | UNVERIFIED (secondary source) |
 | A lost rotated token can only be recovered by a new authorisation; there is no grace period | UNVERIFIED (nothing documented: assumed) |
 | Refresh-token lifetime / inactivity expiry | UNVERIFIED (docs only say "expired or revoked") |
@@ -61,7 +65,7 @@ secret ships with the plugin.
 |---|---|
 | `GET https://api.netatmo.com/api/getstationsdata`, scope `read_station`, query `device_id` (optional, marked deprecated), `get_favorites` (default false) | VERIFIED (docs) |
 | pyatmo sends a POST with form parameters instead, and sets `get_favorites` true by default | VERIFIED (code) |
-| GET and POST are equivalent | UNVERIFIED (`npm run probe` tests both) |
+| GET (what the plugin sends) works; POST (what pyatmo sends) is accepted and returns the same structure | VERIFIED (live probe 2026-11-13, one account with one station) |
 | Envelope `{status, time_exec, time_server, body:{devices:[...], user:{...}}}`; base station `NAMain` with nested `modules[]` | VERIFIED (docs) |
 | Station and module fields: see the table below | VERIFIED (docs) |
 | Data in the cloud "are updated every 10min" | VERIFIED (docs) |
@@ -82,6 +86,18 @@ Request used by the plugin: `GET /api/getstationsdata?get_favorites=false` with
 | `NAModule4` | additional indoor module | `indoor-extra` | `Temperature`, `Humidity`, `CO2`, `min_temp`, `max_temp`, `temp_trend`, `time_utc` | VERIFIED (docs) |
 | `NHC` | Healthy Home Coach | not supported | separate endpoint `gethomecoachsdata`, scope `read_homecoach` | VERIFIED (code) |
 
+Real module mix seen by the live probe (2026-11-13, one account with one station): one
+`NAMain` plus one `NAModule1` and three `NAModule4`, all reachable. Observed `dashboard_data`
+keys, as the table above says, plus `date_min_temp` and `date_max_temp` on every temperature
+module: `NAMain` `AbsolutePressure`, `CO2`, `Humidity`, `Noise`, `Pressure`, `Temperature`,
+`min_temp`/`max_temp`, `pressure_trend`, `temp_trend`, `time_utc`; `NAModule1` `Humidity`,
+`Temperature`, min/max, `temp_trend`, `time_utc`; each `NAModule4` the same plus `CO2`.
+`battery_percent` was absent on the base station and present on every module. Several
+`NAModule4` on one station therefore occur in practice. `NAModule2` (wind) and `NAModule3`
+(rain) were not present, so their rows above stay documentation-only. A station without
+any module and an account without stations (does the API then omit `devices`?) were not
+seen either (UNVERIFIED).
+
 Other module fields: `battery_percent` ("10 = low"), `battery_vp`, `rf_status`
 (90 low, 60 highest), `wifi_status` on the base (86 bad, 56 good), `reachable`, `last_seen`,
 `last_message` (VERIFIED, docs). Units are metric regardless of the account setting
@@ -91,16 +107,23 @@ unit setting: UNVERIFIED in the docs, but the spec's examples are metric and HA 
 The parser ignores everything not listed, drops values that are not finite numbers in a
 plausible range, and never copies `user.mail`, `place`, `home_id` (personal data).
 
-### Pressure vs AbsolutePressure (decision)
+### Pressure vs AbsolutePressure
 
 The OpenAPI document describes `Pressure` as "surface pressure" and `AbsolutePressure` as
-"sea-level pressure". Both research reports consider this swapped in practice (`Pressure`
-is the sea-level-reduced value shown in the apps), **UNVERIFIED**. Home Assistant exposes
-`Pressure` only. Decision in `src/adapter/station/parse.ts`: map the keys one-to-one
-(`Pressure` to `pressure`, `AbsolutePressure` to `absolutePressure`) and make no claim about
-which is which in code. `npm run probe` reports which key is larger for a station above
-50 m (sea-level reduction raises the value), without printing numbers. If the answer says
-"SWAPPED", exchange the two keys in `parse.ts` and update this section.
+"sea-level pressure". Both research reports considered this swapped in practice. The live
+probe settles it the other way round from the spec text: at an elevated station `Pressure`
+was LARGER than `AbsolutePressure`, so `Pressure` is the sea-level (reduced) pressure and
+`AbsolutePressure` the station-level pressure. VERIFIED (live probe 2026-11-13, one account
+with one station). One station is enough to be physically unambiguous (above sea level the
+reduced value always exceeds the station value), but it is still one station. Home Assistant
+exposes `Pressure` only.
+
+In code (`src/adapter/station/parse.ts`) the keys map one-to-one (`Pressure` to `pressure`,
+`AbsolutePressure` to `absolutePressure`). The display labels are "Pressure" and
+"Station pressure" (`src/render/metrics.ts`). Which of the two fields `pressure_trend` describes is
+not documented and was not checked (UNVERIFIED); the plugin shows the trend on "Pressure"
+only. `npm run probe` prints which key is larger for a station above 50 m, without numbers;
+if another station ever reports "SWAPPED", re-open this section.
 
 ### Freshness
 
@@ -111,38 +134,46 @@ plugin derives freshness from `dashboard_data.time_utc`: older than 25 minutes (
 
 ## Endpoint: getmeasure (history)
 
-Used by the history key (docs/ARCHITECTURE.md, sections "History" and "API budget"). **Nothing in this section was
-confirmed with an authenticated request.** Parameters, `type` names and the timestamp rule below were
-read from the live OpenAPI spec of the Weather API on 2026-11-13 (a document, not a response);
-the response SHAPES are derived from that and from the pyatmo and Home Assistant source, and the fixtures
-`tests/fixtures/station/measure-optimised.json` and `measure-plain.json` are **spec-derived, not
-captured** (invented values). `npm run probe -- --history` (see below) prints the structural
-facts that close the open rows. This is the least verified part of the plugin.
+Used by the history key (docs/ARCHITECTURE.md, sections "History" and "API budget"). Parameters,
+`type` names and the timestamp rule were read from the live OpenAPI spec of the Weather API on
+2026-11-13 (a document, not a response). The live probe of the same day (`npm run probe -- --history`,
+one account with one station) then requested 24 h of `temperature` of the base station at scale
+`30min`, once with `optimize=true` and once with `optimize=false`, and settled the rows marked
+"live probe" below: lowercase `type`, both response shapes, the bucket-middle timestamps and
+epoch seconds without an hour offset. It did not cover wind or rain history, other modules,
+other scales (`1hour`, so the 3-day window and rain), other time zones or any error path.
+The fixtures `tests/fixtures/station/measure-optimised.json` and `measure-plain.json` are still
+**spec-derived, not captured** (invented values; their shapes match what the probe reported).
 
 | Claim | Status |
 |---|---|
 | `GET https://api.netatmo.com/api/getmeasure`, scope `read_station` | VERIFIED (OpenAPI spec: "retrieve station (dataGetstationsdata, Getmeasure)"); no authenticated call made |
-| Parameters: `device_id` (base station MAC, required), `scale` (required), `type` (required, comma separated list), `module_id` (optional: absent means the base module), `date_begin`, `date_end` ("Local Unix time in seconds" in the spec: local vs UTC is ambiguous, UNVERIFIED), `limit` (default and max 1024), `optimize` (default true), `real_time` (default false) | VERIFIED as written in the OpenAPI spec (2026-11-13); behaviour UNVERIFIED |
+| Parameters: `device_id` (base station MAC, required), `scale` (required), `type` (required, comma separated list), `module_id` (optional: absent means the base module), `date_begin`, `date_end` ("Local Unix time in seconds" in the spec), `limit` (default and max 1024), `optimize` (default true), `real_time` (default false) | VERIFIED as written in the OpenAPI spec (2026-11-13); behaviour for the base module without `module_id` VERIFIED (live probe 2026-11-13, one account with one station); `module_id` and `limit` behaviour UNVERIFIED |
+| `date_begin`/`date_end` are plain epoch seconds (UTC-based), despite the spec's "Local Unix time": the returned timestamps lined up with the request window and the server clock (clock skew 0 s, last point = `date_end` - 900 s at scale 30min), no whole-hour offset | VERIFIED (live probe 2026-11-13, one account with one station) for that account's time zone; other time zones were not tried (UNVERIFIED) |
 | Scales: `30min`, `1hour`, `3hours`, `1day`, `1week`, `1month` (the spec enum has no `max`, although the `real_time` description mentions it; the plugin does not use it) | VERIFIED (OpenAPI spec enum) |
-| `type` values are LOWERCASE in the spec: `temperature`, `humidity`, `co2`, `noise`, `pressure`, `rain`, `sum_rain`, `windstrength`, `windangle`, `guststrength`, `gustangle`, plus `min_*`/`max_*`/`date_min_*`/`date_max_*` variants (date variants only for scales 1day to 1month; not used). Which modules report which type: base `temperature`, `co2`, `humidity`, `noise`, `pressure`; outdoor `temperature`, `humidity`; additional indoor `temperature`, `co2`, `humidity`; rain gauge `sum_rain`; anemometer `windstrength` (+ angle/gust). The plugin sends exactly these spellings, one table (`MEASURE_SPECS` in `history-parse.ts`, pinned by `tests/station-history.test.ts`). Earlier drafts sent the capitalised dashboard spelling (`Temperature`, `CO2`, `WindStrength`) from memory; whether the service is case-insensitive is UNVERIFIED and not relied on | VERIFIED (OpenAPI spec, 2026-11-13) for the spelling; the module-to-type assignment is UNVERIFIED (recalled, pyatmo). Pressure unit is "bar" in the spec, almost certainly a typo for mbar (UNVERIFIED) |
-| Plugin mapping: temperature, humidity, co2, noise, pressure as named; rain = `sum_rain` with scale `1hour`; wind = `windstrength`. Of the values a key can display, the alternative pressure (`AbsolutePressure`) and gusts have no history key; the history key offers only the seven metrics above | our decision (`history-parse.ts`) |
+| `type` values are LOWERCASE in the spec: `temperature`, `humidity`, `co2`, `noise`, `pressure`, `rain`, `sum_rain`, `windstrength`, `windangle`, `guststrength`, `gustangle`, plus `min_*`/`max_*`/`date_min_*`/`date_max_*` variants (date variants only for scales 1day to 1month; not used). Which modules report which type: base `temperature`, `co2`, `humidity`, `noise`, `pressure`; outdoor `temperature`, `humidity`; additional indoor `temperature`, `co2`, `humidity`; rain gauge `sum_rain`; anemometer `windstrength` (+ angle/gust). The plugin sends exactly these spellings, one table (`MEASURE_SPECS` in `history-parse.ts`, pinned by `tests/station-history.test.ts`). Earlier drafts sent the capitalised dashboard spelling (`Temperature`, `CO2`, `WindStrength`) from memory; whether the service also accepts that spelling was not tried (UNVERIFIED) and is not relied on | VERIFIED (OpenAPI spec, 2026-11-13) for the spelling; the service accepts lowercase `temperature` for the base station: VERIFIED (live probe 2026-11-13, one account with one station); the other types, and the module-to-type assignment, are UNVERIFIED live (recalled, pyatmo; in particular `sum_rain` and `windstrength`, because the station has no rain or wind module). Pressure unit is "bar" in the spec, almost certainly a typo for mbar (UNVERIFIED) |
+| Plugin mapping: temperature, humidity, co2, noise, pressure as named; rain = `sum_rain` with scale `1hour`; wind = `windstrength`. Of the values a key can display, "Station pressure" (`AbsolutePressure`) and gusts have no history key; the history key offers only the seven metrics above | our decision (`history-parse.ts`) |
 | Request used: `device_id`, `module_id` (non-base only), `scale` (`30min` for 6 h and 24 h, `1hour` for 3 d and for rain), `type`, `date_begin`, `date_end` (now), `optimize=true`, `real_time=false` | our decision; the exact query string is pinned by `tests/station-history.test.ts` |
-| Optimised shape: `body: [ { beg_time, step_time, value: [[v], [v], ...] }, ... ]`; a new chunk starts after a gap; `value` rows hold one number per requested type | UNVERIFIED (the spec types `value` loosely as an array of numbers; the nested array-of-arrays form is recalled from the public docs example and pyatmo); the behaviour at gaps (new chunk vs `null` rows) is UNVERIFIED |
-| Non-optimised shape: `body: { "<epoch seconds>": [v], ... }` | UNVERIFIED (recalled from the public docs example; not re-read) |
-| **Timestamp meaning.** With `real_time=false` the spec says returned timestamps are "offset + scale/2", i.e. the MIDDLE of the bucket. Whether `beg_time` (optimised) and the keys (plain) follow that rule, and whether `date_begin`/`date_end` are local or UTC time, is not settled | UNVERIFIED; `probe --history` prints, per shape, the first and last timestamp relative to `date_begin`/`date_end` and `(t - date_begin) mod scale` (0 = bucket start, scale/2 = bucket middle). A whole-hour offset from `date_end` hints at local vs UTC |
-| `step_time` is present in every chunk (the parser tolerates its absence for a chunk with one value) | UNVERIFIED |
-| `null` cells occur for missing buckets | UNVERIFIED (the parser treats them as holes) |
-| Values come in metric units regardless of the account setting (same as getstationsdata); rain `sum_rain` is mm per bucket | UNVERIFIED for getmeasure (`probe --history` prints a range class: within -40..60 means degrees Celsius) |
+| Optimised shape: `body: [ { beg_time, step_time, value: [[v], [v], ...] }, ... ]`; `value` rows hold one number per requested type | VERIFIED (live probe 2026-11-13, one account with one station): an array of chunks with `step_time`, parsed by `parseMeasureBody` |
+| A new chunk starts after a gap (rather than `null` rows) | UNVERIFIED: the probed 24 h had no gap (one chunk, 48 rows) |
+| Non-optimised shape: `body: { "<epoch seconds>": [v], ... }` | VERIFIED (live probe 2026-11-13, one account with one station): an object keyed by epoch seconds, 48 rows, parsed by `parseMeasureBody` |
+| 24 h at scale `30min` gives 48 points | VERIFIED (live probe 2026-11-13, one account with one station): 48 points in both shapes, step 1800 s, no holes, about 100 % of the window covered |
+| **Timestamp meaning.** With `real_time=false` the spec says returned timestamps are "offset + scale/2", i.e. the MIDDLE of the bucket. Both `beg_time` (optimised) and the keys (plain) follow that rule: at scale 1800 s the first point was `date_begin` + 900 s and the last `date_end` - 900 s, `(t - date_begin) mod scale` = 900 s | VERIFIED (live probe 2026-11-13, one account with one station) for scale `30min`; other scales UNVERIFIED |
+| `step_time` is present in every chunk (the parser tolerates its absence for a chunk with one value) | VERIFIED for the one chunk the probe saw (live probe 2026-11-13, one account with one station); a chunk with one value was not seen |
+| `null` cells occur for missing buckets | UNVERIFIED: the probed window had no holes (the parser treats `null` as a hole) |
+| Values come in metric units regardless of the account setting (same as getstationsdata); rain `sum_rain` is mm per bucket | Temperature in the range class -40..60 (degrees Celsius) with account `unit=0` (metric): VERIFIED (live probe 2026-11-13, one account with one station); an imperial account and rain are UNVERIFIED |
 | Data are as fresh as the 10 minute upload cycle; `real_time=true` would add the newest value | UNVERIFIED (not used) |
 | Rate limits and error codes are the ones of getstationsdata (401/403 expired, 403 code 26, 429, 5xx) | UNVERIFIED for this endpoint (shared client code path) |
 | `date_begin` older than the retention of the chosen scale, or an empty range, yields an empty body rather than an error | UNVERIFIED |
 
-**Definition of `HistoryPoint.t`** (decision): the timestamp exactly as the API reports it, unshifted.
-It is documented as the bucket middle (above); the parser makes no guess beyond the spec, because a
-shift by `scale/2` would be wrong if the live service reports the start. A consumer therefore treats
-the bucket as `[t - stepMs/2, t + stepMs/2)`; the newest point may lie up to `stepMs/2` after the request's
-end time, and the first up to `stepMs/2` before `date_begin`. When the probe shows bucket starts instead,
-change this paragraph, the comment in `types.ts` and (if wanted) shift in `parseMeasureBody`.
+**Definition of `HistoryPoint.t`**: the timestamp exactly as the API reports it, unshifted, which
+is the bucket middle (spec, confirmed by the live probe for scale `30min`, see above). A consumer
+treats the bucket as `[t - stepMs/2, t + stepMs/2)`; the sparkline draws with `bucketAnchor`
+"middle". In the probe the first point lay exactly `stepMs/2` after `date_begin` and the newest
+`stepMs/2` before `date_end`. The code does not rely on that alignment: a consumer still allows
+the newest point to lie up to `stepMs/2` after the request's end time and the first up to
+`stepMs/2` before `date_begin`. If a later probe shows bucket starts for another scale, change
+this paragraph, the comment in `types.ts` and (if wanted) shift in `parseMeasureBody`.
 
 Plugin behaviour (code: `src/adapter/station/history.ts`, `history-parse.ts`, `budget.ts`):
 
@@ -233,3 +264,10 @@ data ages, unit preferences, the pressure-key finding. With `--history` it also 
 24 h of temperature of the first base module (optimised and plain) and prints the response
 shape, chunk and point counts, step, null holes and a value range class (no values). Use a token pair that is NOT used by
 the installed plugin or any other client. Update the status column above with what it reports.
+
+The maintainer ran `npm run probe -- --history` once, on 2026-11-13, against their own account
+(one station; the rows marked "live probe"). In that run the refresh worked and the rotated
+token was written back through secretspec. Still open, and most useful from a station that
+differs: wind and rain modules and their history (`windstrength`, `sum_rain` at scale `1hour`),
+another time zone, the capitalised `type` spelling, a station without modules, an account
+without stations, `getmeasure` error codes and rate limits.

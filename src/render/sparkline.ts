@@ -27,7 +27,7 @@ export interface SparklineSpec {
 	readonly bars?: boolean;
 	/**
 	 * What a point's `t` denotes: "middle" (default) = the middle of its bucket, which is what the
-	 * API reports with real_time=false ("offset + scale/2"; UNVERIFIED live); "start" = the bucket's
+	 * API reports with real_time=false ("offset + scale/2"; seen live for scale 30min); "start" = the bucket's
 	 * first instant. Lines are drawn through the bucket middle, bars span the whole bucket.
 	 */
 	readonly bucketAnchor?: "start" | "middle";
