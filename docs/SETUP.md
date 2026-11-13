@@ -23,8 +23,17 @@ personal use.
    like an official Netatmo product).
 2. Note the **client id** and **client secret**. They are credentials: do not paste them into
    issues, chats or the repository.
-3. The scope you need is `read_station`. It is the default scope and needs no approval from
-   Netatmo. The plugin never asks for write scopes.
+3. Tick exactly one scope: **`read_station`**. The portal's scope selector lists 24 entries
+   (observed by the maintainer in November 2026): `read_station`, plus `read_`/`write_`/`access_`
+   entries for other Netatmo products (thermostat, camera, doorbell, presence, smoke and CO
+   detectors, shutters and so on). None of the others is needed:
+   - `read_homecoach` belongs to the Healthy Home Coach, a different device the plugin does not
+     support.
+   - `write_*` scopes would let a leaked token change settings; `access_*` scopes need Netatmo
+     approval. The plugin never asks for them.
+   - If you ticked more scopes than `read_station`, generate the token again. A token keeps the
+     scopes it was created with, and a broader one only enlarges the damage of a leak.
+   `read_station` is also the default scope and needs no approval from Netatmo.
 
 ## 3. Get a token pair
 

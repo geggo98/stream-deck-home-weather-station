@@ -48,7 +48,7 @@ describe("unpersisted token rotation does not make data look stale", () => {
 		source.state = unpersisted;
 		const key = new RecordingKeySurface();
 		await new KeyController(makeEnv(source)).appear(key, { moduleKey }, "temperature");
-		assert.equal(key.lastTitle, "21.4°C\nLiving room", "no age hint");
+		assert.equal(key.lastTitle, "21.4°C\nLiving r…", "no age hint");
 		const dial = new RecordingDialSurface();
 		await new DialController(makeEnv(source)).appear(dial, { moduleKey, followFocus: false });
 		assert.equal(dial.last?.value.opacity, 1);

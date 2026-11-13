@@ -70,7 +70,7 @@
 	</p>
 
 	<sdpi-item label="Label">
-		<sdpi-textfield setting="label" placeholder="Module name" maxlength="12"></sdpi-textfield>
+		<sdpi-textfield setting="label" placeholder="Module name" maxlength="9"></sdpi-textfield>
 	</sdpi-item>
 	<p class="pi-hint">Replaces the module name on the key. Leave empty to use the name from the account.</p>
 
@@ -114,8 +114,9 @@
 		<p id="accountResult" class="pi-hint" role="status"></p>
 
 		<p class="pi-hint">
-			Create your own app in the Netatmo developer portal, scope read_station, generate or authorise a
-			token pair, and paste the values here. They stay on this computer.
+			Create your own app in the Netatmo developer portal. When you generate or authorise a token,
+			tick only the scope read_station (no write or access scopes), and paste the values here.
+			They stay on this computer.
 		</p>
 
 		<details id="browserLoginBox" class="pi-details">

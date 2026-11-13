@@ -95,8 +95,9 @@ pitfalls: [docs/SETUP.md](docs/SETUP.md).
 
 The route we recommend trying first (experimental browser sign-in):
 
-1. Create an app at <https://dev.netatmo.com> with scope `read_station` and note its
-   client id and client secret.
+1. Create an app at <https://dev.netatmo.com> and note its client id and client secret. Where
+   the portal asks for scopes, tick **only `read_station`** (see docs/SETUP.md, section 2, for why
+   nothing else is needed).
 2. In that app's settings, register the redirect URI `http://localhost:53682/callback`
    exactly like this (the Property Inspector shows the address the plugin will use)
    **[unverified: nobody has confirmed that the portal has such a field or that Netatmo

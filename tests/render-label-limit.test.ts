@@ -12,10 +12,10 @@ import { makeModuleKey } from "../src/render/select.ts";
 const PI = join(resolve(import.meta.dirname, ".."), PLUGIN_DIR_NAME, "ui/measurement.html");
 
 describe("label limit", () => {
-	it("is 12 and cuts longer labels with an ellipsis", () => {
-		assert.equal(MAX_LABEL_CHARS, 12);
-		assert.equal(cleanLabel("abcdefghijkl"), "abcdefghijkl");
-		assert.equal(cleanLabel("abcdefghijklm"), "abcdefghijk…");
+	it("is 9 and cuts longer labels with an ellipsis", () => {
+		assert.equal(MAX_LABEL_CHARS, 9);
+		assert.equal(cleanLabel("abcdefghi"), "abcdefghi");
+		assert.equal(cleanLabel("abcdefghij"), "abcdefgh…");
 		const title = buildKeyView({
 			metric: "temperature",
 			settings: { moduleKey: makeModuleKey(STATION_ID, BASE_ID), label: "A label of more than twelve" },
@@ -25,7 +25,7 @@ describe("label limit", () => {
 			snapshot: makeSnapshot([baseModule()]),
 			now: NOW,
 		}).title;
-		assert.match(title ?? "", /\nA label of …$/);
+		assert.match(title ?? "", /\nA label …$/);
 	});
 
 	it("matches the maxlength of the label field in the Property Inspector", () => {

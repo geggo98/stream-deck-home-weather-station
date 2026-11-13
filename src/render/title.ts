@@ -38,7 +38,7 @@ export function statusWord(kind: Exclude<Classification["kind"], "value">): stri
  * longer text with an ellipsis, so a longer field would promise what the key cannot show);
  * tests/render-label-limit.test.ts compares the two.
  */
-export const MAX_LABEL_CHARS = 12;
+export const MAX_LABEL_CHARS = 9;
 
 /** Longest label on the dial's touch strip, which is wider than a key. */
 export const MAX_DIAL_LABEL_CHARS = 20;

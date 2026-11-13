@@ -39,7 +39,7 @@ describe("KeyController", () => {
 		const { controller } = setup(source);
 		const key = new RecordingKeySurface();
 		await controller.appear(key, { moduleKey: BASE_KEY }, "temperature");
-		assert.equal(key.lastTitle, "21.4°C\nLiving room");
+		assert.equal(key.lastTitle, "21.4°C\nLiving r…");
 		assert.ok(key.images.length >= 1);
 		for (const image of key.images) assert.ok(image && isSvgDataUri(image), "setImage never gets a raw svg string");
 		assert.match(decodeSvg(key.lastImage), /^<svg /);
@@ -53,7 +53,7 @@ describe("KeyController", () => {
 		await controller.appear(key, {}, "temperature");
 		assert.equal(key.lastTitle, "Set up");
 		source.emit({ snapshot: makeSnapshot(), state: { kind: "ok" } });
-		assert.equal(key.lastTitle, "21.4°C\nLiving room", "no second write path that could stick");
+		assert.equal(key.lastTitle, "21.4°C\nLiving r…", "no second write path that could stick");
 	});
 
 	it("walks the status table: stale, unreachable, auth-error, back to fresh", async () => {
@@ -72,7 +72,7 @@ describe("KeyController", () => {
 		assert.equal(key.lastTitle, "Sign in");
 
 		source.emit({ snapshot: makeSnapshot(), state: { kind: "ok" } });
-		assert.equal(key.lastTitle, "21.4°C\nLiving room");
+		assert.equal(key.lastTitle, "21.4°C\nLiving r…");
 	});
 
 	it("does not rewrite image or title when nothing visible changed (de-duplication)", async () => {
@@ -125,7 +125,7 @@ describe("KeyController", () => {
 			assert.equal(key.lastTitle, "…");
 			source.emit({ snapshot: makeSnapshot() });
 			assert.equal(key.settingsWrites[0]?.moduleKey, BASE_KEY);
-			assert.equal(key.lastTitle, "45%\nLiving room");
+			assert.equal(key.lastTitle, "45%\nLiving r…");
 		});
 
 		it("leaves a deliberately cleared module alone", async () => {
@@ -148,7 +148,7 @@ describe("KeyController", () => {
 			assert.equal(source.refreshCalls, 1);
 			assert.equal(key.lastTitle, "↑22.8°C\n↓19.2°C");
 			await settle(80);
-			assert.equal(key.lastTitle, "21.4°C\nLiving room", "the overlay returned by itself");
+			assert.equal(key.lastTitle, "21.4°C\nLiving r…", "the overlay returned by itself");
 		});
 
 		it("refreshes but shows no overlay for metrics without extremes", async () => {
@@ -258,7 +258,7 @@ describe("KeyController", () => {
 			const { controller } = setup(source);
 			const key = new RecordingKeySurface();
 			await controller.appear(key, { moduleKey: BASE_KEY, metric: "co2" }, "temperature");
-			assert.equal(key.lastTitle, "612 ppm\nLiving room");
+			assert.equal(key.lastTitle, "612 ppm\nLiving r…");
 		});
 
 		it("repaints on a global settings change (units)", async () => {
@@ -276,7 +276,7 @@ describe("KeyController", () => {
 			await controller.appear(key, { moduleKey: BASE_KEY }, "temperature");
 			global.unitSystem = "imperial";
 			notify();
-			assert.equal(key.lastTitle, "70.6°F\nLiving room");
+			assert.equal(key.lastTitle, "70.6°F\nLiving r…");
 		});
 	});
 });
