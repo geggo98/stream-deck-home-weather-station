@@ -89,7 +89,7 @@ The settings are kept in `scripts/github-settings.py` and were applied with
 - **Workflow token read-only by default**; each job asks for more. *Allow GitHub Actions to
   create and approve pull requests* is on because release-please needs it (a trade-off: a
   compromised workflow could then approve PRs; the allow-list and pinning limit what can run).
-- **Outside contributors**: workflow runs need approval every time.
+- **First-time contributors**: workflow runs need approval; later runs of known contributors and bots do not.
 - **Secret scanning with push protection**, Dependabot alerts and security updates, private
   vulnerability reporting, CodeQL default setup for JavaScript/TypeScript (GitHub runs it itself,
   outside the allow-list; the language list showed empty right after enabling: **[unverified]**

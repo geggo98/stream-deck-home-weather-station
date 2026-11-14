@@ -86,7 +86,7 @@ describe("github settings plan", () => {
 		assert.equal(plan.actions_permissions.sha_pinning_required, true);
 		assert.equal(plan.actions_permissions.allowed_actions, "selected");
 		assert.equal(plan.workflow_permissions.default_workflow_permissions, "read");
-		assert.equal(plan.fork_pr_approval.approval_policy, "all_external_contributors");
+		assert.equal(plan.fork_pr_approval.approval_policy, "first_time_contributors");
 	});
 
 	it("protects the default branch and the release tags, with no bypass actors", () => {

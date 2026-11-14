@@ -17,7 +17,7 @@ What it enforces, and why:
     `scripts/github-settings.py --apply` from that branch (the allow-list is the approval).
   * The workflow token is read-only by default; workflows ask for more per job. Creating
     release pull requests needs `can_approve_pull_request_reviews` (release-please).
-  * Outside contributors' workflow runs need approval every time.
+  * Workflow runs of first-time contributors need approval (bot runs such as release-please are not blocked).
   * Secret scanning with push protection, Dependabot alerts and security updates, private
     vulnerability reporting, CodeQL default setup for JavaScript/TypeScript.
   * Rulesets: the default branch cannot be deleted or force-pushed; release tags `v*` cannot be
@@ -103,7 +103,7 @@ def plan() -> dict:
 		},
 		"transitive_pins": {wrapper: nested for wrapper, nested in TRANSITIVE_PINS.items() if wrapper in pins},
 		"workflow_permissions": {"default_workflow_permissions": "read", "can_approve_pull_request_reviews": True},
-		"fork_pr_approval": {"approval_policy": "all_external_contributors"},
+		"fork_pr_approval": {"approval_policy": "first_time_contributors"},
 		"toggles": {
 			"vulnerability-alerts": "PUT",
 			"automated-security-fixes": "PUT",
