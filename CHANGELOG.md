@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.3](https://github.com/geggo98/stream-deck-home-weather-station/compare/v0.1.2...v0.1.3) (2026-11-14)
+
+
+### Features
+
+* three dial types and a switch for what a rotation changes ([210d614](https://github.com/geggo98/stream-deck-home-weather-station/commit/210d6144d72a4d078a2d78d7b11af20a76fd915b))
+
+
+### Bug Fixes
+
+* cut key labels at 8 characters and leave no space before the ellipsis ([e535bd6](https://github.com/geggo98/stream-deck-home-weather-station/commit/e535bd609cfc57e445e654521dbd8943cc6770e7))
+
 ## [0.1.2](https://github.com/geggo98/stream-deck-home-weather-station/compare/v0.1.1...v0.1.2) (2026-11-14)
 
 
