@@ -57,7 +57,7 @@ describe("buildNavView", () => {
 		assert.equal(battery.title, "80 %\nGarden");
 		const low = makeSnapshot([baseModule(), { ...makeTwoStationSnapshot().stations[0]!.modules[1]!, batteryPercent: 10 }]);
 		assert.notEqual(buildNavView(input({ kind: "info", focus: outdoor, infoPage: 1, snapshot: low })).svg, battery.svg);
-		assert.equal(buildNavView(input({ kind: "info", focus, infoPage: 1 })).title, "2 min\nLiving r…", "no battery page on the base station: stays on the age");
+		assert.equal(buildNavView(input({ kind: "info", focus, infoPage: 1 })).title, "2 min\nLiving…", "no battery page on the base station: stays on the age");
 	});
 
 	it("a stale reading dims the reload face and says how old it is", () => {

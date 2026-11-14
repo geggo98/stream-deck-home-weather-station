@@ -63,7 +63,7 @@ describe("unpersisted token rotation: data stays current, the faces carry a mark
 		source.state = unpersisted;
 		const key = new RecordingKeySurface();
 		await new KeyController(makeEnv(source)).appear(key, { moduleKey }, "temperature");
-		assert.equal(key.lastTitle, "21.4°C\nLiving r…", "no age hint");
+		assert.equal(key.lastTitle, "21.4°C\nLiving…", "no age hint");
 		const svg = Buffer.from((key.lastImage ?? "").replace(/^data:image\/svg\+xml;base64,/, ""), "base64").toString("utf8");
 		assert.ok(svg.includes(DOT), "the painted image carries the warning dot");
 		const dial = new RecordingDialSurface();

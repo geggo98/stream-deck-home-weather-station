@@ -46,7 +46,7 @@ export function statusWord(kind: Exclude<Classification["kind"], "value">): stri
  * longer text with an ellipsis, so a longer field would promise what the key cannot show);
  * tests/render-label-limit.test.ts compares the two.
  */
-export const MAX_LABEL_CHARS = 9;
+export const MAX_LABEL_CHARS = 8;
 
 /** Longest label on the dial's touch strip, which is wider than a key. */
 export const MAX_DIAL_LABEL_CHARS = 20;
@@ -60,7 +60,7 @@ export function cleanLabel(text: string | undefined, max = MAX_LABEL_CHARS): str
 	const spaced = text.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/g, " ");
 	const collapsed = spaced.replace(/\s+/g, " ").trim();
 	const chars = Array.from(collapsed);
-	return chars.length <= max ? collapsed : `${chars.slice(0, max - 1).join("")}…`;
+	return chars.length <= max ? collapsed : `${chars.slice(0, max - 1).join("").trimEnd()}…`;
 }
 
 /** Join non-empty lines with newlines; returns undefined for no lines (the title then falls back to the one in the manifest). */

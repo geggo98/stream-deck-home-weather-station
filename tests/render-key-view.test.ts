@@ -48,7 +48,7 @@ function view(
 describe("display table", () => {
 	it("fresh: value and label, normal colours, no status dot", () => {
 		const v = view();
-		assert.equal(v.title, "21.4°C\nLiving r…");
+		assert.equal(v.title, "21.4°C\nLiving…");
 		assert.equal(v.classification.kind, "value");
 		assert.equal(v.svg.includes("<circle"), false);
 	});
@@ -132,11 +132,11 @@ describe("value rendering", () => {
 	});
 
 	it("ignores the overlay for a metric without extremes", () => {
-		assert.equal(view({ overlay: true, metric: "humidity" }).title, "45%\nLiving r…");
+		assert.equal(view({ overlay: true, metric: "humidity" }).title, "45%\nLiving…");
 	});
 
 	it("adds a min/max line and hint only on request", () => {
-		assert.equal(view({ settings: { moduleKey: BASE_KEY, showMinMax: true } }).title, "21.4°C\nLiving r…\n↓19 ↑23");
+		assert.equal(view({ settings: { moduleKey: BASE_KEY, showMinMax: true } }).title, "21.4°C\nLiving…\n↓19 ↑23");
 		assert.ok(view({ settings: { moduleKey: BASE_KEY, showMinMax: true } }).svg.includes(GLYPHS["arrow-up-to-line"]));
 		assert.equal(view().svg.includes(GLYPHS["arrow-up-to-line"]), false);
 	});
@@ -151,7 +151,7 @@ describe("value rendering", () => {
 	it("bigText moves the value into the image and leaves the title to the label", () => {
 		const v = view({ settings: { moduleKey: BASE_KEY, bigText: true } });
 		assert.ok(v.svg.includes("21.4"));
-		assert.equal(v.title, "Living r…");
+		assert.equal(v.title, "Living…");
 	});
 
 	it("a user label beats the module name; wind shows its compass point", () => {
@@ -162,7 +162,7 @@ describe("value rendering", () => {
 	});
 
 	it("honours imperial units", () => {
-		assert.equal(view({ settings: { moduleKey: BASE_KEY, unitSystem: "imperial" } }).title, "70.6°F\nLiving r…");
+		assert.equal(view({ settings: { moduleKey: BASE_KEY, unitSystem: "imperial" } }).title, "70.6°F\nLiving…");
 	});
 
 	it("never puts API strings into the SVG", () => {
@@ -183,7 +183,7 @@ describe("value rendering", () => {
 	it("rain defaults to the 24 h total", () => {
 		const snapshot = makeSnapshot([baseModule(), rainModule()]);
 		const v = view({ metric: "rain24h", snapshot, settings: { moduleKey: makeModuleKey(STATION_ID, rainModule().id) } });
-		assert.equal(v.title, "7.6 mm\nRain gau…");
+		assert.equal(v.title, "7.6 mm\nRain ga…");
 	});
 });
 
@@ -221,8 +221,8 @@ describe("freshness, selection and text helpers", () => {
 	});
 
 	it("cleans untrusted labels", () => {
-		assert.equal(cleanLabel("Gar\u0000den\u202e!"), "Gar den !");
-		assert.equal(cleanLabel("a very long module name"), "a very l\u2026");
+		assert.equal(cleanLabel("Gar\u0000den\u202e!"), "Gar den…");
+		assert.equal(cleanLabel("a very long module name"), "a very\u2026");
 		assert.equal(cleanLabel(undefined), "");
 		assert.equal(joinLines([undefined, "", "a", "b"]), "a\nb");
 		assert.equal(joinLines([undefined, ""]), undefined);

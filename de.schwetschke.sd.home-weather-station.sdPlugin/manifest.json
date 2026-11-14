@@ -1,7 +1,7 @@
 {
   "Name": "Home Weather Station",
   "UUID": "de.schwetschke.sd.home-weather-station",
-  "Version": "0.1.1.0",
+  "Version": "0.1.2.0",
   "Author": "Stefan Schwetschke",
   "URL": "https://github.com/geggo98/stream-deck-home-weather-station",
   "Description": "Shows indoor and outdoor temperature, humidity, CO2, noise, pressure, rain, wind and trends from a Netatmo weather station on your keys. Unofficial: independent project, not affiliated with or endorsed by Netatmo, Elgato or Corsair.",

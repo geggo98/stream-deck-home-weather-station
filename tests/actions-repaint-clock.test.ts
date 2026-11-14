@@ -77,7 +77,7 @@ describe("clock-driven repaint of keys", () => {
 		const controller = new KeyController({ ...makeEnv(source, { now: () => now, clock }), overlayMs: 30 });
 		const key = new RecordingKeySurface();
 		await controller.appear(key, { moduleKey: BASE_KEY }, "temperature");
-		assert.equal(key.lastTitle, "21.4°C\nLiving r…", "fresh: module name on the second line");
+		assert.equal(key.lastTitle, "21.4°C\nLiving…", "fresh: module name on the second line");
 		const writesBefore = key.titles.length;
 
 		// The base module was measured 2 min before NOW; this is 30 min later, past the 25 min threshold.

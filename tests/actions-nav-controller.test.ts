@@ -70,7 +70,7 @@ describe("navigation keys", () => {
 	it("next station and previous station land on the other station's base", async () => {
 		const { nav, store } = setup();
 		const next = await key(nav, "next-station");
-		assert.equal(next.lastTitle, "→ Second S…");
+		assert.equal(next.lastTitle, "→ Second…");
 		nav.press(next.id);
 		assert.deepEqual(store.get(), { stationId: STATION_B_ID, moduleId: BASE_B_ID, metric: "temperature" });
 		const prev = await key(nav, "prev-station");
@@ -159,7 +159,7 @@ describe("info key", () => {
 	it("cycles data age and battery, and flashes when only the age exists", async () => {
 		const { nav, store } = setup();
 		const info = await key(nav, "info");
-		assert.equal(info.lastTitle, "2 min\nLiving r…");
+		assert.equal(info.lastTitle, "2 min\nLiving…");
 		nav.press(info.id);
 		assert.equal(info.alerts, 1, "the base station reports no battery: nothing to cycle to");
 		store.set({ ...here, moduleId: OUTDOOR_ID });
@@ -346,7 +346,7 @@ describe("the previous keys go the other way (with three of each, +1 and -1 land
 		const { nav, store } = setup(threeSensors, { ...here, moduleId: OUTDOOR_ID });
 		const prev = await key(nav, "prev-sensor");
 		const next = await key(nav, "next-sensor");
-		assert.equal(prev.lastTitle, "← Living r…");
+		assert.equal(prev.lastTitle, "← Living…");
 		assert.equal(next.lastTitle, "→ Bedroom");
 		nav.press(prev.id);
 		assert.equal(store.get()?.moduleId, BASE_ID);
@@ -358,8 +358,8 @@ describe("the previous keys go the other way (with three of each, +1 and -1 land
 		const { nav, store } = setup(threeStations);
 		const prev = await key(nav, "prev-station");
 		const next = await key(nav, "next-station");
-		assert.equal(prev.lastTitle, "← Third St…");
-		assert.equal(next.lastTitle, "→ Second S…");
+		assert.equal(prev.lastTitle, "← Third S…");
+		assert.equal(next.lastTitle, "→ Second…");
 		nav.press(prev.id);
 		assert.equal(store.get()?.stationId, thirdId);
 		nav.press(prev.id);
