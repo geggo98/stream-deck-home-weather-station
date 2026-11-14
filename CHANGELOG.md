@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.1.2](https://github.com/geggo98/stream-deck-home-weather-station/compare/v0.1.1...v0.1.2) (2026-11-14)
+
+
+### Features
+
+* add the Sensor Focus key, keep a following key's own value, run scripts with node ([89ac142](https://github.com/geggo98/stream-deck-home-weather-station/commit/89ac1422a73967168130dae044c2de53dbbbe63c))
+* let npm run probe start itself through secretspec ([50eaa6a](https://github.com/geggo98/stream-deck-home-weather-station/commit/50eaa6a29e7d03349168dc4b26d8ae4cd6e076f3))
+
+
+### Bug Fixes
+
+* act on the pre-release review ([e1799d4](https://github.com/geggo98/stream-deck-home-weather-station/commit/e1799d48555a53e6027926350a3125fac9897431))
+* give secretspec a reason when the probe starts itself ([e3b6918](https://github.com/geggo98/stream-deck-home-weather-station/commit/e3b69184903d218f1dd03d827fb1a073f3d4b4cf))
+
+
+### Documentation
+
+* record what the first live probe confirmed, and name the pressure keys ([f9a7019](https://github.com/geggo98/stream-deck-home-weather-station/commit/f9a7019588f19c1a0b9b2c25efe0533d62610c03))
+
 ## [0.1.1](https://github.com/geggo98/stream-deck-home-weather-station/compare/v0.1.0...v0.1.1) (2026-11-13)
 
 
