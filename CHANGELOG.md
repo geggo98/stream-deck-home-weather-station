@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/geggo98/stream-deck-home-weather-station/compare/v0.1.4...v0.1.5) (2026-11-14)
+
+
+### Continuous Integration
+
+* only first-time contributors need workflow approval ([3f77efb](https://github.com/geggo98/stream-deck-home-weather-station/commit/3f77efbfd6d40074fd1d1112c8daab66440e2a92))
+
 ## [0.1.4](https://github.com/geggo98/stream-deck-home-weather-station/compare/v0.1.3...v0.1.4) (2026-11-14)
 
 
