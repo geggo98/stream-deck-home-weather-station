@@ -1,6 +1,6 @@
 {
   "name": "stream-deck-home-weather-station",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Unofficial Stream Deck plugin that shows data from a Netatmo weather station: temperature, humidity, CO2, noise, pressure, rain and wind. Independent project, not affiliated with or endorsed by Netatmo, Elgato or Corsair.",
   "author": "Stefan Schwetschke <stefan@schwetschke.de>",
   "license": "MIT",
