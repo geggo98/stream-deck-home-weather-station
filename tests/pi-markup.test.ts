@@ -436,7 +436,7 @@ test("brand rules: no logo or image references, no product branding in titles", 
 test("sensor focus page: metric from getMetrics (no hot-reload), no module picker, no follow checkbox, alerts, label limit, own explanation", () => {
 	const html = read("sensor-focus.html");
 	const b = bound("sensor-focus.html");
-	assert.deepEqual([...b.keys()].sort(), ["alertAbove", "alertBelow", "bigText", "label", "metric", "showMinMax", "showTrend", "unitSystem"]);
+	assert.deepEqual([...b.keys()].sort(), ["alertAbove", "alertBelow", "bigText", "metric", "showMinMax", "showTrend", "unitSystem"]);
 	assert.equal(b.get("metric")?.attrs.datasource, "getMetrics");
 	assert.equal(b.get("metric")?.attrs.default, "temperature");
 	assert.ok(!("hot-reload" in (b.get("metric")?.attrs ?? {})), "the metric list does not depend on a module");
@@ -452,8 +452,19 @@ test("sensor focus page: metric from getMetrics (no hot-reload), no module picke
 		"Next/Previous Sensor and Station keys and the dial",
 		"the Next/Previous Value keys do not change it",
 		"the key says No data",
+		"only visit sensors that report the value the focus is on",
 	]) assert.ok(text.includes(phrase), `sensor focus page lacks "${phrase}"`);
 	assert.match(html, /<title>Sensor Focus Settings<\/title>/);
+});
+
+test("pages that describe following keys use the current follow model", () => {
+	const nav = read("navigation.html").replace(/\s+/g, " ");
+	assert.match(nav, /Focus display, the dial and the History key follow sensor and value; Sensor Focus and measurement keys with Follow focus follow only the sensor/);
+	const focus = read("focus.html").replace(/\s+/g, " ");
+	assert.match(focus, /Sensor Focus and measurement keys with Follow focus follow only the sensor/);
+	const measurement = read("measurement.html").replace(/\s+/g, " ");
+	assert.match(measurement, /Ignored while Follow focus is ticked/);
+	assert.ok(!/setting="label"/.test(read("sensor-focus.html")), "Sensor Focus has no label field");
 });
 
 test("focus page names the difference to the Sensor Focus key", () => {

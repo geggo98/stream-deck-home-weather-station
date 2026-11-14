@@ -40,12 +40,46 @@ describe("github settings plan", () => {
 	it("allows exactly the pinned actions the workflows use, nothing GitHub-owned or verified by default", () => {
 		const fromWorkflows = usesIn(join(root, ".github", "workflows"));
 		assert.ok(fromWorkflows.length >= 4, `looked at ${fromWorkflows.length} action references, expected more`);
-		const transitive = Object.keys(plan.transitive_pins as Record<string, string>);
-		for (const ref of transitive) assert.match(ref, /^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/, "a transitive pin is a full commit SHA too");
-		assert.deepEqual(plan.selected_actions.patterns_allowed, [...new Set([...fromWorkflows, ...transitive])].sort(), "workflow pins plus the documented transitive pins, nothing else");
+		const wrappers = Object.keys(plan.transitive_pins as Record<string, string>);
+		const nested = Object.values(plan.transitive_pins as Record<string, string>);
+		for (const ref of [...wrappers, ...nested]) assert.match(ref, /^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/, "a transitive pin and its wrapper are full commit SHAs");
+		assert.deepEqual(plan.selected_actions.patterns_allowed, [...new Set([...fromWorkflows, ...nested])].sort(), "workflow pins plus the documented transitive pins, nothing else");
 		for (const ref of plan.selected_actions.patterns_allowed as string[]) assert.match(ref, /@[0-9a-f]{40}$/);
 		assert.equal(plan.selected_actions.github_owned_allowed, false);
 		assert.equal(plan.selected_actions.verified_allowed, false);
+	});
+
+	it("the nested pin is recorded for the exact attest-build-provenance pin of release.yml (re-resolve it when Dependabot bumps the wrapper)", () => {
+		const release = readFileSync(join(root, ".github", "workflows", "release.yml"), "utf8");
+		const wrapper = /uses:\s*(actions\/attest-build-provenance@[0-9a-f]{40})/.exec(release)?.[1];
+		assert.ok(wrapper, "release.yml uses actions/attest-build-provenance");
+		// literal on purpose: the expectation must not come from the plan itself
+		const expectedNested = "actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d";
+		assert.equal(
+			plan.transitive_pins[wrapper!],
+			expectedNested,
+			`the wrapper pin ${wrapper} in release.yml has no matching TRANSITIVE_PINS entry: re-resolve the nested pin ` +
+				`(gh api "repos/actions/attest-build-provenance/contents/action.yml?ref=<sha>" --jq .content | base64 -d | grep uses:), ` +
+				"then replace the key and value in scripts/github-settings.py and the literal in this test",
+		);
+		assert.ok((plan.selected_actions.patterns_allowed as string[]).includes(expectedNested), "the nested pin is on the allow-list");
+	});
+
+	it("a wrapper pin that differs from the key drops the nested pin from the plan (negative control)", () => {
+		const dir = mkdtempSync(join(tmpdir(), "ghs-"));
+		try {
+			mkdirSync(join(dir, "scripts"));
+			mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
+			cpSync(script, join(dir, "scripts", "github-settings.py"));
+			writeFileSync(join(dir, ".github", "workflows", "x.yml"), `jobs:\n  a:\n    steps:\n      - uses: actions/attest-build-provenance@${"0".repeat(40)}\n`);
+			const r = run(dir);
+			assert.equal(r.status, 0, r.stderr);
+			const p = JSON.parse(r.stdout);
+			assert.deepEqual(p.transitive_pins, {});
+			assert.ok(!(p.selected_actions.patterns_allowed as string[]).some((x) => x.startsWith("actions/attest@")));
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
 	it("requires SHA pinning, a read-only token and approval for every outside contributor", () => {

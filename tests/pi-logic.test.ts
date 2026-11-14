@@ -190,10 +190,10 @@ test("the global-settings events and message fields match the protocol", () => {
 	assert.deepEqual(interfaceKeys("ClearResultMessage").sort(), ["error", "event", "ok", "status"]);
 });
 
-test("label maxlength in both pages equals MAX_LABEL_CHARS in src/render/title.ts (cannot drift)", () => {
+test("label maxlength in the measurement page equals MAX_LABEL_CHARS in src/render/title.ts (cannot drift)", () => {
 	const limit = Number(/export const MAX_LABEL_CHARS = (\d+);/.exec(readFileSync(join(root, "src", "render", "title.ts"), "utf8"))?.[1]);
 	assert.ok(Number.isInteger(limit) && limit > 0, "constant not found; the regex no longer sees it");
-	for (const page of ["measurement.html", "sensor-focus.html"]) {
+	for (const page of ["measurement.html"]) {
 		const html = readFileSync(join(ui, page), "utf8");
 		const m = /<sdpi-textfield[^>]*setting="label"[^>]*>/.exec(html)?.[0] ?? "";
 		assert.ok(m, `${page}: label textfield not found`);

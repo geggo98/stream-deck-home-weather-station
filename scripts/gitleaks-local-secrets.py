@@ -27,10 +27,24 @@ was in .env.local an hour ago is already dead and its successor is a different s
      Values shorter than 16 characters are not calibrated on (too many false positives).
      A shape match must stand alone: a longer run of the same characters (a 40-digit commit hash
      around a 24-digit shape) is not a match. A separator also matches percent-encoded (%7C). Lock files and the vendored bundle are exempt
-     (base64 digests there look like random alphanumerics).
+     (base64 digests there look like random alphanumerics). So is every line that holds a
+     `sha256-`, `sha384-` or `sha512-` prefixed base64 string (CSP and SRI hashes).
+
+  Known limits of the shapes (they are statistics, not proof):
+    * False positive: a standalone 24-hex string that is not a secret (a Mongo-style object id, a
+      trace id) matches a shape calibrated on a 24-hex client id. Treat such a hit as "an id or
+      personal data", not necessarily as the client secret. A fake sample in a test goes into the
+      `allow` list of .gitleaks-shapes.json (one path AND one regex, with a reason).
+    * False positive: a long alphanumeric string without the sha prefix (a hash in a minified file) matches
+      the alphanumeric shape; the exemption for paths and for `shaNNN-` lines does not cover it.
+    * False negative: hex is calibrated in lower case only. The same client id written in
+      UPPER-CASE hex is not reported by the shape (the exact value of this machine still is).
+    * The `shaNNN-` exemption is per line: a real secret on the very same line as an SRI hash is not reported by the shapes.
 
 The values never appear on a command line, in the output or in a file that outlives the run:
-the temporary config lives in a 0700 directory, is written 0600 and is deleted in `finally`;
+the temporary config lives in a 0700 directory, is written 0600 and is deleted in `finally`
+(also after SIGTERM and SIGHUP, which are turned into a normal exit with status 128+signal;
+SIGKILL cannot be caught and leaves the file behind, in a 0700 directory);
 gitleaks runs with --redact. The output names the variable and the spelling, never the value.
 Without the dotenv file only the generic rules run (stated on stderr). Exit code: gitleaks' own
 (0 clean, 1 leaks found), 2 for usage errors, 3 when gitleaks cannot be started.
@@ -45,6 +59,8 @@ import os
 import pathlib
 import re
 import shutil
+import signal
+import string
 import subprocess
 import sys
 import math
@@ -58,7 +74,15 @@ ENTROPY_FLOOR = 2.8  # never accept a threshold below this: runs of one or two c
 SHAPES_FILE = ".gitleaks-shapes.json"
 CHARSETS = {"hex-lower": "0-9a-f", "hex-upper": "0-9A-F", "alnum": "0-9A-Za-z"}
 # base64 digests in these files look like random alphanumerics; tracked secrets do not live there
+CHARSET_CHARS = {
+	"hex-lower": "0123456789abcdef",
+	"hex-upper": "0123456789ABCDEF",
+	"alnum": string.digits + string.ascii_uppercase + string.ascii_lowercase,
+}
 SHAPE_EXEMPT_PATHS = [r"package-lock\.json$", r"devenv\.lock$", r"ui/vendor/", r"\.map$"]
+# CSP hashes ('sha256-<base64>') and SRI attributes (integrity="sha384-<base64>") look like random
+# alphanumerics too. Exempts the whole LINE (regexTarget = "line") in which such a string stands.
+SHAPE_EXEMPT_LINE = r"sha(?:256|384|512)-[A-Za-z0-9+/_-]{40,}={0,2}"
 
 
 def parse_dotenv(path: pathlib.Path) -> dict[str, str]:
@@ -150,7 +174,9 @@ def calibrate(values: dict[str, str], allow: list[dict] | None = None) -> dict:
 		"version": 1,
 		"note": "Shapes of the project's secrets: character class and length per part, separators and a minimum "
 		"Shannon entropy. NO value is stored. Regenerate with `npm run scan:calibrate` after a secret changes its format. "
-		"`allow` entries (kept by --calibrate) exempt ONE obviously fake sample in ONE file; each needs a reason.",
+		"`allow` entries (kept by --calibrate) exempt ONE obviously fake sample in ONE file; each needs a reason. "
+		"Known limits: a standalone 24-hex string (an object id) matches a 24-hex shape; hex is calibrated in lower case only, "
+		"so the same id in upper case is not reported; lines with a sha256-/sha384-/sha512- hash are exempt.",
 		"shapes": shapes,
 		"allow": allow or [],
 	}
@@ -170,12 +196,24 @@ def shape_regex(shape: dict) -> str:
 	return f"(?:^|[^0-9A-Za-z])({body})(?:[^0-9A-Za-z]|$)"
 
 
+def max_entropy(shape: dict) -> float:
+	"""The highest Shannon entropy a string of this shape can reach: bounded by its alphabet and by its length."""
+	alphabet: set[str] = set(shape["separators"])
+	for part in shape["parts"]:
+		alphabet |= set(CHARSET_CHARS[part["charset"]])
+	length = sum(p["max"] for p in shape["parts"]) + len(shape["separators"])
+	return math.log2(min(len(alphabet), length))
+
+
 def load_profile(path: pathlib.Path) -> dict:
 	if not path.is_file():
 		return {"shapes": [], "allow": []}
 	data = json.loads(path.read_text(encoding="utf-8"))
 	for shape in data.get("shapes", []):
 		assert shape["minEntropy"] >= ENTROPY_FLOOR and all(p["charset"] in CHARSETS for p in shape["parts"]), "invalid shape profile"
+		ceiling = max_entropy(shape)
+		if shape["minEntropy"] > ceiling:
+			raise SystemExit(f"invalid shape profile: {shape['name']} needs entropy >= {shape['minEntropy']}, but no string of that shape can have more than {ceiling:.2f}: the shape would never match")
 	for entry in data.get("allow", []):
 		assert entry.get("path") and entry.get("regex") and entry.get("reason"), "an allow entry needs path, regex and reason"
 	return {"shapes": data.get("shapes", []), "allow": data.get("allow", [])}
@@ -197,6 +235,9 @@ def shape_rules(shapes: list[dict], allow: list[dict] | None = None) -> list[str
 			f"entropy = {shape['minEntropy']}",
 			"[[rules.allowlists]]",
 			f"paths = [{exempt}]",
+			"[[rules.allowlists]]",
+			'regexTarget = "line"',
+			f"regexes = ['''{SHAPE_EXEMPT_LINE}''']",
 		]
 		for entry in allow or []:  # each entry needs BOTH its path and its regex to apply
 			lines += [
@@ -268,6 +309,11 @@ def main() -> int:
 	profile = load_profile(repo / SHAPES_FILE)
 	shapes, allow = profile["shapes"], profile["allow"]
 
+	def terminate(signum: int, _frame: object) -> None:
+		raise SystemExit(128 + signum)  # unwinds through `finally`, which removes the temporary config
+
+	for sig in (signal.SIGTERM, signal.SIGHUP):
+		signal.signal(sig, terminate)
 	tmp = pathlib.Path(tempfile.mkdtemp(prefix="gitleaks-local-"))
 	try:
 		os.chmod(tmp, 0o700)

@@ -148,7 +148,7 @@ describe("the sensor focus action", () => {
 
 	it("says what sets it apart from the focus display, in the catalog and the manifest", () => {
 		const display = FOCUS_SPECS.find((s) => s.id === "focus")!;
-		assert.match(spec!.tooltip, /follows the Next\/Previous Sensor and Station keys but not the Next\/Previous Value keys/);
+		assert.match(spec!.tooltip, /moved by the Next\/Previous Sensor and Station keys but not by the Next\/Previous Value keys\. Those sensor keys only visit sensors that report the value the focus is on/);
 		assert.match(display.tooltip, /^Shows the focused sensor AND the focused value\./);
 		const tips = committed.Actions.map((a) => a.Tooltip);
 		assert.ok(tips.includes(spec!.tooltip) && tips.includes(display.tooltip));
@@ -160,5 +160,17 @@ describe("the sensor focus action", () => {
 		assert.match(text, /follow: "sensor"/);
 		const licence = readFileSync(join(ROOT, PLUGIN_DIR_NAME, "imgs/icons/LICENSE-lucide.txt"), "utf-8");
 		assert.ok(licence.includes(spec!.glyph), "the licence note names every glyph in use");
+	});
+});
+
+describe("Sensor Focus default metric", () => {
+	it("the code default equals the default of the metric dropdown in its Property Inspector", () => {
+		const code = readFileSync(fileURLToPath(new URL("../src/actions/focus-keys.ts", import.meta.url)), "utf-8");
+		const inCode = /class SensorFocusKeyAction[\s\S]*?\{\s*metric:\s*"(\w+)",\s*follow:\s*"sensor"\s*\}/.exec(code)?.[1];
+		assert.ok(inCode, "the SensorFocusKeyAction appear call was not found");
+		const html = readFileSync(fileURLToPath(new URL("../de.schwetschke.sd.home-weather-station.sdPlugin/ui/sensor-focus.html", import.meta.url)), "utf-8");
+		const select = /<sdpi-select\b[^>]*\bsetting="metric"[^>]*>/.exec(html)?.[0];
+		const inHtml = /\bdefault="(\w+)"/.exec(select ?? "")?.[1];
+		assert.equal(inCode, inHtml, "the dropdown shows one metric and the key another");
 	});
 });

@@ -251,6 +251,7 @@ function goodSamples(): readonly string[] {
 		`"Version": "${j([0, 1, 0, 0], ".")}"`,
 		`id ${j(["00000000", "0000", "0000", "0000", "000000000000"], "-")}`,
 		`- uses: actions/checkout@${"0123456789abcdef".repeat(2)}01234567 # v1.2.3`,
+		`  "owner/repo@${"0123456789abcdef".repeat(2)}01234567": "wrapper",`, // TRANSITIVE_PINS entry
 		`repo https://github.com/${OWN_SLUG}.git`,
 		`encoding UTF-8 hash SHA-256 standard RFC-5737 image icon@2x.png`,
 		`version 1.2.3, ${j([300, 1, 2, 3], ".")}`,
@@ -273,6 +274,15 @@ test("scanner validation: every identifier format is detected in a built-in samp
 test("scanner validation: allowed look-alikes are not reported", () => {
 	for (const line of goodSamples()) {
 		assert.deepEqual(scanText(line, "sample.txt"), [], `false positive on: ${mask(line)}`);
+	}
+});
+
+test("scanner validation: the pinned-action exemption does not cover other 40-hex strings", () => {
+	const sha = `${"0123456789abcdef".repeat(2)}01234567`;
+	const bad = [`token @${sha}`, `commit ${sha} in the log`, `uses ${sha}`, `owner/repo ${sha}`];
+	for (const line of bad) {
+		const kinds = scanText(line, "sample.txt").map((f) => f.kind);
+		assert.ok(kinds.includes("long-hex"), `not flagged: ${mask(line)}`);
 	}
 });
 
@@ -688,4 +698,23 @@ test("the second pressure is called Station pressure everywhere, the placeholder
 		assert.match(text, /live probe of 2026-11-13/, `${f} must cite the probe`);
 	}
 	assert.match(readRoot("src/render/colour.ts").replace(/\n\s*\*/g, " ").replace(/\s+/g, " "), /UX choice/, "the pressure bands are our choice, not a Netatmo rule");
+});
+
+test("docs state the follow rules: No data names the sensor, the navigation limitation, the release recovery path", () => {
+	const flat = (f: string): string => readRoot(f).replace(/\s+/g, " ");
+	const readme = flat("README.md");
+	assert.match(readme, /says `No data` plus the sensor's name when the focused sensor does not measure the key's value/);
+	assert.match(readme, /Known limitation: Next\/Previous Sensor and the dial's push only visit sensors that report the focused value/);
+	assert.match(readme, /not a problem with your station's data/);
+	assert.match(readme, /rain or wind module/);
+	assert.match(readme, /Sensor Focus key says `Pick module` only while the focus has no module/);
+	assert.match(flat("docs/ARCHITECTURE.md"), /Known limitation: `nextModule`[^.]*skips modules that do not report the FOCUS's metric/);
+	const publishing = flat("docs/PUBLISHING.md");
+	assert.match(publishing, /gh run rerun <run-id> --failed/);
+	assert.match(publishing, /the release stays without an asset until the job is repeated/);
+	assert.match(publishing, /retention-days: 1/);
+	assert.match(publishing, /exact SHA/);
+	assert.match(publishing, /keyed by the wrapper's exact pin/);
+	// no stale claim that getmeasure was never called with credentials
+	assert.doesNotMatch(flat("docs/WEATHER-API.md"), /no authenticated call made/);
 });

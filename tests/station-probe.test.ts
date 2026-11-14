@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { describe, it } from "node:test";
+import os from "node:os";
 import path from "node:path";
-import { ProbeStore, SECRETSPEC_REASON, VIA_SECRETSPEC, checkRawOutPath, main, pressureFinding, secretspecInvocation, structureSignature, summarise } from "../scripts/probe-api.ts";
+import { ProbeStore, SECRETSPEC_REASON, VIA_SECRETSPEC, checkRawOutPath, defaultReexec, defaultSecretspecSet, main, pressureFinding, providerNote, secretspecInvocation, secretspecSetArgs, structureSignature, summarise } from "../scripts/probe-api.ts";
 import { T0, fixture, makeTempDir, sendJson, startApiDouble, stationsOk, tokenIssuer } from "./station-helpers.ts";
 
 /** The probe output must carry structure only. These markers are put into every identifying field. */
@@ -270,5 +271,74 @@ describe("probe: --raw-out must not land where `git add .` finds it", () => {
 		assert.equal(r.code, 0, r.text);
 		assert.equal(fs.statSync(file).mode & 0o777, 0o600);
 		assert.match(r.text, /WARNING.*personal data.*DELETE/s);
+	});
+});
+
+/** A `secretspec` on a private PATH that records its arguments and stdin, then exits as told. */
+function fakeSecretspec(t: { after: (fn: () => void) => void }, behaviour: string): { env: NodeJS.ProcessEnv; log: string; stdin: string } {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-secretspec-"));
+	t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+	const log = path.join(dir, "args.log");
+	const stdin = path.join(dir, "stdin.txt");
+	fs.writeFileSync(path.join(dir, "secretspec"), `#!/bin/sh\nfor a in "$@"; do printf '%s\\n' "$a"; done > "${log}"\ncase " $* " in *" set "*) cat > "${stdin}";; esac\n${behaviour}\n`, { mode: 0o755 });
+	return { env: { PATH: `${dir}:/usr/bin:/bin` }, log, stdin };
+}
+
+describe("probe: the default secretspec runners (a fake secretspec on PATH)", () => {
+	it("the write-back passes --reason before `set`, the token on stdin and never on the command line", (t) => {
+		const fake = fakeSecretspec(t, "exit 0");
+		assert.deepEqual(defaultSecretspecSet("rotated-token-value", fake.env), { ok: true });
+		assert.deepEqual(fs.readFileSync(fake.log, "utf8").trimEnd().split("\n"), ["--reason", SECRETSPEC_REASON, "set", "NETATMO_REFRESH_TOKEN", "--from-file", "-"]);
+		assert.equal(fs.readFileSync(fake.stdin, "utf8"), "rotated-token-value");
+		assert.ok(!fs.readFileSync(fake.log, "utf8").includes("rotated-token-value"));
+	});
+
+	it("an existing SECRETSPEC_REASON is respected: no --reason argument", (t) => {
+		const fake = fakeSecretspec(t, "exit 0");
+		assert.equal(defaultSecretspecSet("x-token", { ...fake.env, SECRETSPEC_REASON: "mine" }).ok, true);
+		assert.deepEqual(fs.readFileSync(fake.log, "utf8").trimEnd().split("\n"), ["set", "NETATMO_REFRESH_TOKEN", "--from-file", "-"]);
+		assert.deepEqual(secretspecSetArgs({}).slice(0, 2), ["--reason", SECRETSPEC_REASON]);
+	});
+
+	it("a refused write-back (non-zero exit) and a missing secretspec are both reported as not ok", (t) => {
+		assert.equal(defaultSecretspecSet("x-token", fakeSecretspec(t, "exit 3").env).ok, false);
+		assert.equal(defaultSecretspecSet("x-token", { PATH: "/nonexistent-dir" }).ok, false);
+	});
+
+	it("the self-restart passes --reason to `secretspec run` and returns the child's exit code", async (t) => {
+		const fake = fakeSecretspec(t, "exit 7");
+		const invocation = secretspecInvocation(["--history"], fake.env, "/repo", () => false);
+		assert.equal(defaultReexec(invocation), 7);
+		assert.deepEqual(fs.readFileSync(fake.log, "utf8").trimEnd().split("\n").slice(0, 3), ["run", "--reason", SECRETSPEC_REASON]);
+	});
+
+	it("a secretspec killed by a signal is a failure (1), not a success", (t) => {
+		const fake = fakeSecretspec(t, "kill -TERM $$");
+		assert.equal(defaultReexec(secretspecInvocation([], fake.env, "/repo", () => false)), 1);
+	});
+
+	it("a secretspec that cannot be started is reported as undefined, so main can say so", async () => {
+		const invocation = secretspecInvocation([], { PATH: "/nonexistent-dir" }, "/repo", () => false);
+		assert.equal(defaultReexec(invocation), undefined);
+	});
+});
+
+describe("probe: it says which provider it chose before it restarts itself", () => {
+	it("names the dotenv fallback, the user's provider and secretspec's default", async () => {
+		const seen: string[] = [];
+		const origErr = console.error;
+		console.error = (...a: unknown[]) => void seen.push(a.join(" "));
+		try {
+			await main([], {}, { repoRoot: "/repo", reexec: () => 0, isIgnored: () => true });
+			await main([], { SECRETSPEC_PROVIDER: "onepassword" }, { repoRoot: "/repo", reexec: () => 0 });
+		} finally {
+			console.error = origErr;
+		}
+		const starts = seen.filter((l) => l.startsWith("probe: the NETATMO_* values"));
+		assert.equal(starts.length, 2);
+		assert.match(starts[1]!, /provider from SECRETSPEC_PROVIDER/);
+		assert.match(providerNote({}, { SECRETSPEC_PROVIDER: "dotenv:///repo/.env.local" }), /local \.env\.local/);
+		assert.match(providerNote({}, {}), /own default provider/);
+		for (const line of starts) assert.match(line, /written back to the same place/);
 	});
 });

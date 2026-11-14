@@ -159,7 +159,7 @@
       "Name": "Sensor Focus",
       "UUID": "de.schwetschke.sd.home-weather-station.focus-sensor",
       "Icon": "imgs/actions/focus-sensor/icon",
-      "Tooltip": "Shows the value you choose for the sensor the focus points at; follows the Next/Previous Sensor and Station keys but not the Next/Previous Value keys",
+      "Tooltip": "Shows the value you choose for the sensor the focus points at; moved by the Next/Previous Sensor and Station keys but not by the Next/Previous Value keys. Those sensor keys only visit sensors that report the value the focus is on (see Focus Display), not this key's value",
       "Controllers": [
         "Keypad"
       ],

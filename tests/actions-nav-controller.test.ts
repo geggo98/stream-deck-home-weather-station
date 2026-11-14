@@ -48,7 +48,7 @@ describe("navigation keys", () => {
 		const next = await key(nav, "next-metric");
 		const prev = await key(nav, "prev-metric");
 		assert.equal(next.lastTitle, "→ Humidity");
-		assert.equal(prev.lastTitle, "← Station pressure");
+		assert.equal(prev.lastTitle, "← Stn press.");
 		nav.press(next.id);
 		assert.equal(store.get()?.metric, "humidity");
 		assert.equal(next.lastTitle, "→ CO2", "the preview follows the focus");

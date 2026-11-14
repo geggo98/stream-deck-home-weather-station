@@ -27,6 +27,8 @@ export interface KeyViewInput {
 	readonly now: number;
 	/** Show today's min/max instead of the value (temperature only; ignored otherwise). */
 	readonly overlay?: boolean;
+	/** The key follows the focus: its "No data" face keeps the name of the sensor it landed on. */
+	readonly followed?: boolean;
 }
 
 export interface KeyView {
@@ -108,7 +110,13 @@ export function buildKeyView(input: KeyViewInput): KeyView {
 		now: input.now,
 	});
 	const status = statusFace(classification, def.glyph);
-	if (status) return { svg: status.svg, title: status.title, classification };
+	if (status) {
+		// A following key says which sensor lacks the value: the focus, not the user, put it there.
+		const where = input.followed === true && classification.kind === "no-data"
+			? cleanLabel(classification.selected.module.name)
+			: "";
+		return { svg: status.svg, title: where ? joinLines([status.title, where]) : status.title, classification };
+	}
 	if (classification.kind !== "value") throw new Error("unreachable: statusFace covers every non-value");
 
 	const { selected, value, stale, ageMs, warning } = classification;

@@ -66,7 +66,7 @@ could outlive the outage. Display table:
 | value outside the key's alert threshold | alert colour (static; no blinking, see "Alerts") |
 | no data source (no service) or nothing fetched yet and a cached error | `Offline` |
 | fixed key without a module | `Pick module` |
-| module (or focus) has no reading for the metric | `No data` |
+| module (or focus) has no reading for the metric | `No data`; a following key (Sensor Focus, Follow focus) adds the sensor's name as a second line |
 | history without data | `No history`; while the first request runs `Loading`; failed request `Offline`; budget used up `Try later` |
 | token rotation not saved | `ok` ConnectionState with `warning: "unpersisted-rotation"`; data keeps flowing and keys keep their normal face and full opacity. The warning is shown twice: the Property Inspector's account status line (the router sends `AccountStatus.warning`) and a warning marker on the keys: a warning-coloured dot on the tile, on the dial a "!" and a warning-coloured indicator bar; staleness wins when both apply (`src/render/status.ts`, `tile.ts`, `dial-feedback.ts`). The human text is the shared constant `UNPERSISTED_ROTATION_MESSAGE` |
 | one failed poll | every key counts as stale (`freshness !== fresh` or a cached error) and is dimmed at once, however recent the last good data is |
@@ -195,7 +195,7 @@ pressure, rain, wind) stay as fixed-binding keys.
 | id | What it does |
 |---|---|
 | `focus` | Manifest name "Focus Display". Follows the whole focus (station, sensor AND metric); shows value and label of the focused module. Alerts are ignored (the unit changes with the metric). Press: rate-limited refresh. |
-| `focus-sensor` | Manifest name "Sensor Focus". Always follows the focus's station and sensor, shows the metric of ITS OWN settings (default temperature) and ignores the focus's metric, so Next/Previous Value do not change it. Alert thresholds apply (same metric, same unit). Press: rate-limited refresh; temperature also shows today's min/max for 6 s. Own page `ui/sensor-focus.html`: no module picker, no follow checkbox. |
+| `focus-sensor` | Manifest name "Sensor Focus". Always follows the focus's station and sensor, shows the metric of ITS OWN settings (default temperature) and ignores the focus's metric, so Next/Previous Value do not change it. Alert thresholds apply (same metric, same unit). Press: rate-limited refresh; temperature also shows today's min/max for 6 s. Own page `ui/sensor-focus.html`: no module picker, no follow checkbox, no Label field. |
 | `focus-refresh` | Reload: at most one real request per 60 s; shows "just now" or the age. **Cannot force the station to measure**; it only fetches the newest data the station has uploaded (about every 10 minutes). |
 | `focus-next-metric`, `focus-prev-metric` | Next / previous value on the same sensor; icon and small label show the metric that WOULD be selected. |
 | `focus-next-sensor`, `focus-prev-sensor` | Same value on the next / previous sensor; dimmed when no other module reports the metric. |
@@ -210,10 +210,20 @@ semantics of the key controller (`effective()` in `src/actions/key-controller.ts
 
 * A fixed key with `followFocus` ticked follows the focus's station and sensor but keeps its
   own metric (a CO2 key stays CO2, `No data` where the sensor lacks it); alerts stay valid.
-  `focus-sensor` behaves the same, with the follow always on.
+  `focus-sensor` behaves the same, with the follow always on. A following key drops its
+  `label` (`effective()` strips it) so the key shows the followed module's name, and its
+  `No data` face carries that name as a second line (`followed` in `buildKeyView`).
 * `focus` (Focus Display) follows sensor AND metric and ignores alerts.
 * `history` and `weather-dial` follow the whole focus by default (`followFocus` default true);
   off pins them to their own module and metric.
+* Known limitation: `nextModule` (Next/Previous Sensor, dial push) skips modules that do not
+  report the FOCUS's metric, not the key's own. A `focus-sensor` key (or a fixed key with
+  `followFocus`) showing a metric the focus does not share therefore cannot reach every
+  module: from a temperature focus the rain gauge and anemometer are never visited.
+  `nextMetric` only cycles the metrics the focused module reports, so changing the metric
+  helps only for modules that share one with it; a module sharing none (rain, wind) can only
+  be shown by a fixed, unfollowing key. Not a data bug; a fix would need navigation that
+  steps over the key's metric (not implemented).
 * Sensor and station navigation (keys, dial push and push-rotate) move the sensor focus;
   next/previous metric (keys, dial rotation) move the metric focus.
 

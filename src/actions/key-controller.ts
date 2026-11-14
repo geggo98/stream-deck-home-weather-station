@@ -155,19 +155,25 @@ export class KeyController extends ControllerBase<KeySurface, KeyEntry, KeyExtra
 	 * - The sensor focus (follow "sensor") behaves like such a key, but always, not only when ticked:
 	 *   a stored moduleKey is overridden by the focus's, and the metric comes from its own settings.
 	 *
+	 * - A label is ignored while the key follows: it would name one sensor on a key that shows
+	 *   whichever sensor the focus points at.
+	 *
 	 * Before the first snapshot a following key falls back to its own (loading) state.
 	 */
 	private effective(entry: KeyEntry): { metric: DisplayMetricId; settings: ActionSettings } {
 		const own = { metric: this.ownMetric(entry), settings: entry.settings };
 		if (!this.followsFocus(entry)) return own;
-		const { alertAbove: _above, alertBelow: _below, ...withoutAlerts } = entry.settings;
+		// A label would name one sensor on a key that shows whichever sensor the focus points at,
+		// so a following key always shows the followed module's name instead.
+		const { label: _label, ...followed } = entry.settings;
+		const { alertAbove: _above, alertBelow: _below, ...withoutAlerts } = followed;
 		const fullFollow = entry.follow === "all";
-		const fallback = fullFollow ? { metric: own.metric, settings: withoutAlerts } : own;
+		const fallback = fullFollow ? { metric: own.metric, settings: withoutAlerts } : { metric: own.metric, settings: followed };
 		if (!this.env.focus) return fallback;
 		const focus = resolveFocus(this.env.getSource()?.getSnapshot(), this.env.focus.get());
 		if (!focus) return fallback;
 		const moduleKey = focusModuleKey(focus);
-		if (!fullFollow) return { metric: own.metric, settings: { ...entry.settings, moduleKey } };
+		if (!fullFollow) return { metric: own.metric, settings: { ...followed, moduleKey } };
 		const metric = displayMetricOf(focus.metric);
 		if (!metric) return fallback;
 		return { metric, settings: { ...withoutAlerts, moduleKey } };
@@ -217,6 +223,7 @@ export class KeyController extends ControllerBase<KeySurface, KeyEntry, KeyExtra
 			snapshot: source?.getSnapshot(),
 			now,
 			overlay: entry.overlayUntil > now,
+			followed: this.followsFocus(entry),
 		});
 		writeKeyFace(entry, view, this.env.logger);
 	}

@@ -147,7 +147,7 @@ The fixtures `tests/fixtures/station/measure-optimised.json` and `measure-plain.
 
 | Claim | Status |
 |---|---|
-| `GET https://api.netatmo.com/api/getmeasure`, scope `read_station` | VERIFIED (OpenAPI spec: "retrieve station (dataGetstationsdata, Getmeasure)"); no authenticated call made |
+| `GET https://api.netatmo.com/api/getmeasure`, scope `read_station` | VERIFIED (OpenAPI spec: "retrieve station (dataGetstationsdata, Getmeasure)"); an authenticated call with this scope worked: VERIFIED (live probe 2026-11-13, one account with one station) |
 | Parameters: `device_id` (base station MAC, required), `scale` (required), `type` (required, comma separated list), `module_id` (optional: absent means the base module), `date_begin`, `date_end` ("Local Unix time in seconds" in the spec), `limit` (default and max 1024), `optimize` (default true), `real_time` (default false) | VERIFIED as written in the OpenAPI spec (2026-11-13); behaviour for the base module without `module_id` VERIFIED (live probe 2026-11-13, one account with one station); `module_id` and `limit` behaviour UNVERIFIED |
 | `date_begin`/`date_end` are plain epoch seconds (UTC-based), despite the spec's "Local Unix time": the returned timestamps lined up with the request window and the server clock (clock skew 0 s, last point = `date_end` - 900 s at scale 30min), no whole-hour offset | VERIFIED (live probe 2026-11-13, one account with one station) for that account's time zone; other time zones were not tried (UNVERIFIED) |
 | Scales: `30min`, `1hour`, `3hours`, `1day`, `1week`, `1month` (the spec enum has no `max`, although the `real_time` description mentions it; the plugin does not use it) | VERIFIED (OpenAPI spec enum) |

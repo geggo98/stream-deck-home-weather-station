@@ -131,10 +131,16 @@ export class ProbeStore implements CredentialStore {
 	}
 }
 
+/** Arguments of the write-back `secretspec set`: the audit reason unless the user set SECRETSPEC_REASON. */
+export function secretspecSetArgs(env: NodeJS.ProcessEnv): string[] {
+	const reason = env.SECRETSPEC_REASON ? [] : ["--reason", SECRETSPEC_REASON];
+	return [...reason, "set", REFRESH_TOKEN_NAME, "--from-file", "-"];
+}
+
 /** The value goes through stdin only. Output of the child is discarded (it could echo). */
-function defaultSecretspecSet(token: string): { ok: boolean } {
-	const reason = process.env.SECRETSPEC_REASON ? [] : ["--reason", SECRETSPEC_REASON];
-	const result = spawnSync("secretspec", [...reason, "set", REFRESH_TOKEN_NAME, "--from-file", "-"], {
+export function defaultSecretspecSet(token: string, env: NodeJS.ProcessEnv = process.env): { ok: boolean } {
+	const result = spawnSync("secretspec", secretspecSetArgs(env), {
+		env,
 		input: token,
 		stdio: ["pipe", "ignore", "ignore"],
 		timeout: 60_000,
@@ -348,6 +354,23 @@ function isMain(): boolean {
 	return process.argv[1] !== undefined && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 }
 
+/** Exit code of the self-restart: undefined when secretspec could not be started, 1 when it was killed by a signal. */
+export function restartExitCode(result: { readonly error?: Error; readonly status: number | null }): number | undefined {
+	return result.error ? undefined : (result.status ?? 1);
+}
+
+/** Runs the re-start through secretspec with the terminal attached. */
+export function defaultReexec(invocation: { readonly command: string; readonly args: string[]; readonly env: NodeJS.ProcessEnv }): number | undefined {
+	return restartExitCode(spawnSync(invocation.command, invocation.args, { env: invocation.env, stdio: "inherit" }));
+}
+
+/** Which secret store the restarted probe reads from (and writes the rotated token back to), for the console. */
+export function providerNote(env: NodeJS.ProcessEnv, invocationEnv: NodeJS.ProcessEnv): string {
+	if (env.SECRETSPEC_PROVIDER) return "the provider from SECRETSPEC_PROVIDER";
+	if (invocationEnv.SECRETSPEC_PROVIDER) return "the local .env.local (dotenv); set SECRETSPEC_PROVIDER to use another provider";
+	return "secretspec's own default provider";
+}
+
 /**
  * secretspec's policy `require_reason` (default "agents" in a project without a setting) refuses
  * access to secrets without a stated reason; the reason lands in secretspec's local audit log.
@@ -421,13 +444,8 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv = process.env,
 		if (env[VIA_SECRETSPEC] !== "1") {
 			// Not started through secretspec: do it ourselves once, so `npm run probe` just works.
 			const invocation = secretspecInvocation(argv, env, deps.repoRoot ?? REPO_ROOT);
-			const run =
-				deps.reexec ??
-				((i: ReturnType<typeof secretspecInvocation>) => {
-					const r = spawnSync(i.command, i.args, { env: i.env, stdio: "inherit" });
-					return r.error ? undefined : (r.status ?? 1);
-				});
-			console.error("probe: the NETATMO_* values are not in the environment; starting through `secretspec run` ...");
+			const run = deps.reexec ?? defaultReexec;
+			console.error(`probe: the NETATMO_* values are not in the environment; starting through \`secretspec run\` with ${providerNote(env, invocation.env)}; the rotated refresh token is written back to the same place ...`);
 			const code = run(invocation);
 			if (code !== undefined) return code;
 			console.error("probe: `secretspec` could not be started (is it installed? `devenv shell` provides it).");

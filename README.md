@@ -50,7 +50,7 @@ Stations upload about every 10 minutes, so no key can be "more live" than that.
 |---|---|
 | Temperature, Humidity, CO2, Noise, Pressure, Rain, Wind | One fixed module and metric per key (set in the Property Inspector). Press: refresh, at most one real request per minute. Temperature also shows today's min/max for 6 seconds after the press. |
 | Focus Display | Follows the whole focus: station, sensor AND value. Next/Previous Value change what it shows. Press: refresh. |
-| Sensor Focus | Always follows the focus's station and sensor, but shows the value chosen in its own settings (default temperature); Next/Previous Value do not change it. Alert thresholds apply. Press: refresh (temperature also shows today's min/max for 6 seconds). |
+| Sensor Focus | Always follows the focus's station and sensor, but shows the value chosen in its own settings (default temperature); Next/Previous Value do not change it. Alert thresholds apply. It has no Label field: it always shows the name of the sensor it is on. Press: refresh (temperature also shows today's min/max for 6 seconds). |
 | Reload | Fetches the newest data from the cloud now. **It cannot force the station to measure a new value**; it only fetches what the station has uploaded last (about every 10 minutes). At most one real request per minute, however often you press. Shows "just now" or the age. |
 | Next Value / Previous Value | Next value on the same sensor (for example temperature, then humidity, then CO2 of the same module). |
 | Next Sensor / Previous Sensor | The same value on the next sensor (for example indoor temperature, then outdoor temperature). Dimmed with `No other sensor` when no other sensor reports it. |
@@ -76,9 +76,22 @@ Who follows what:
 - The seven fixed keys have a "Follow focus" checkbox (off by default). Ticked, a key behaves
   like Sensor Focus: it follows the focus's station and sensor and keeps its own value (a CO2
   key stays a CO2 key and says `No data` where the focused sensor has no CO2). Its alert
-  thresholds stay valid.
+  thresholds stay valid. A custom label is ignored while it follows (the key shows the name
+  of the followed sensor), and where the sensor lacks the value the `No data` face names it.
 - History and Weather Dial follow the whole focus (station, sensor and value) by default;
   with "follow focus" off they keep their own module and value.
+- **Known limitation: Next/Previous Sensor and the dial's push only visit sensors that report
+  the focused value.** They skip every module that does not measure the value of the focus
+  (the value focus, which Next/Previous Value and the dial's rotation set). So a Sensor Focus
+  key, or a fixed key with "Follow focus", that shows a value the focus does not currently
+  have cannot reach every sensor. Example: with a temperature focus the keys never stop on a
+  rain or wind module, because those report no temperature. Next/Previous Value only cycles
+  through the values of the sensor the focus is on, so moving it helps only for sensors that
+  share another value with it (for example a CO2 or humidity focus reaches the indoor
+  modules that report it). A sensor that has no value in common with any other sensor (rain,
+  wind) cannot be reached by navigation at all; show it with a fixed key that has a module
+  chosen and "Follow focus" off. This is a limitation of the navigation rules, not a problem
+  with your station's data.
 - The sensor and station navigation keys and the dial's push (sensor) and push-rotate
   (station) move the sensor focus. Next/Previous Value and the dial's rotation move the
   value focus.
@@ -207,7 +220,7 @@ Use at your own risk, without warranty (see [LICENSE](LICENSE)).
 | History key says `No history` | No data for that sensor and window, or the metric has no history ("Station pressure" and Gusts do not). |
 | History key says `Offline` or `Try later` | The history request failed (network or server trouble) or the request budget is used up. Failures are remembered for 30 seconds, successful results for 10 minutes; the key retries about every minute. |
 | Key says `Offline` | Nothing could be fetched yet and there is no cached data (network trouble), or the plugin has no data source. |
-| Key says `Pick module` or `No data` | A fixed key has no module chosen, or the chosen module reports nothing for that metric yet. |
+| Key says `Pick module` or `No data` | A fixed key without "Follow focus" has no module chosen (`Pick module`), or the chosen module reports nothing for that metric yet (`No data`). A Sensor Focus key, or a fixed key with "Follow focus" ticked, says `No data` plus the sensor's name when the focused sensor does not measure the key's value (for example a CO2 key on an outdoor module): nothing is wrong, the value is not there. Move the focus to another sensor with Next/Previous Sensor, or see the known limitation under "Who follows what". A Sensor Focus key says `Pick module` only while the focus has no module at all (no data loaded yet). |
 | Navigation key says `One station`, `No other sensor`, `Only one value` or `No module` | Nothing to navigate to: only one station, no other sensor reports this value, the sensor reports one value only, or the focus has no module yet (no data loaded). The key is dimmed on purpose. |
 | Key shows `...` for long | First poll still running or the network is down. The plugin retries with backoff. |
 | The number is missing, only the icon shows | A custom title typed into the key in the Stream Deck app hides the plugin's value (the plugin cannot override it). Clear the title field in the app, or switch on the "Large value" option in the Property Inspector (**[unverified]** on hardware whether that avoids the problem; clearing the title is the safe fix). |

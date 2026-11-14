@@ -44,6 +44,11 @@ describe("plugin.ts wiring (the file imports the SDK, so it is read, not run)", 
 		assert.doesNotMatch(source, /as unknown as/);
 	});
 
+	it("wires the remembered all-metrics and history actions into the Property Inspector router", () => {
+		assert.match(source, /isAllMetricsAction:\s*isRememberedAllMetricsAction/);
+		assert.match(source, /isHistoryAction:\s*isRememberedHistoryAction/);
+	});
+
 	it("loads the global settings through the retrying loader", () => {
 		assert.match(source, /loadGlobalSettingsWithRetry\(/);
 		assert.doesNotMatch(source, /markGlobalSettingsLoaded\(\)/);

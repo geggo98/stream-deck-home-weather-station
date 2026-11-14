@@ -67,3 +67,20 @@ describe("buildNavView", () => {
 		assert.notEqual(view.svg, buildNavView(input({ kind: "refresh" })).svg);
 	});
 });
+
+describe("Next/Previous Value key titles", () => {
+	it("every value fits the key width (the longest plain label is Temperature) and Station pressure has a short form", async () => {
+		const { METRICS } = await import("../src/render/metrics.ts");
+		const width = "\u2192 Temperature".length;
+		for (const id of Object.keys(METRICS) as Array<keyof typeof METRICS>) {
+			// the preview names the NEXT value, so approach each metric from the one before it
+			const prev = buildNavView(input({ kind: "prev-metric", focus: { ...focus, metric: METRICS[id].source } })).title ?? "";
+			const next = buildNavView(input({ kind: "next-metric", focus: { ...focus, metric: METRICS[id].source } })).title ?? "";
+			for (const line of `${prev}\n${next}`.split("\n")) assert.ok(line.length <= width, `${id}: "${line}" is too wide`);
+		}
+		const titles = (["pressure", "temperature", "humidity", "co2", "noise"] as const).flatMap((metric) =>
+			(["next-metric", "prev-metric"] as const).map((kind) => buildNavView(input({ kind, focus: { ...focus, metric } })).title ?? ""));
+		assert.ok(titles.some((t) => /Stn press\./.test(t)), `no title shows the short form: ${JSON.stringify(titles)}`);
+		assert.ok(!titles.some((t) => /Station pressure/.test(t)));
+	});
+});

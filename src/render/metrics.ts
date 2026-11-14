@@ -30,6 +30,8 @@ export interface MetricDef {
 	readonly id: DisplayMetricId;
 	/** Short English label, used for the dial title and the PI dropdown. */
 	readonly label: string;
+	/** Shorter form for the Next/Previous Value key title, where `label` would be clipped. */
+	readonly shortLabel?: string;
 	readonly kind: UnitKind;
 	/** The measurement read from `ModuleData.values`. */
 	readonly source: MetricKey;
@@ -83,6 +85,7 @@ export const METRICS: Readonly<Record<DisplayMetricId, MetricDef>> = {
 	absolutePressure: {
 		id: "absolutePressure",
 		label: "Station pressure",
+		shortLabel: "Stn press.",
 		kind: "pressure",
 		source: "absolutePressure",
 		glyph: "gauge",

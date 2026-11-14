@@ -4,7 +4,7 @@
  */
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
-import { isRememberedAllMetricsAction } from "../src/actions/global-settings.ts";
+import { isRememberedAllMetricsAction, MAX_TRACKED_ACTION_SETTINGS, rememberAllMetricsAction } from "../src/actions/global-settings.ts";
 import { KeyController } from "../src/actions/key-controller.ts";
 import { createPiRouter } from "../src/actions/pi-router.ts";
 import type { Focus } from "../src/focus/navigate.ts";
@@ -118,6 +118,42 @@ describe("sensor focus key", () => {
 		assert.equal(humidity.titles.length, n, "humidity has no extremes");
 	});
 
+	it("names the sensor it landed on in the No data face", async () => {
+		const { keys, store } = setup();
+		const key = new RecordingKeySurface("sf");
+		await keys.appear(key, { metric: "co2" }, SENSOR);
+		store.set({ ...here, moduleId: OUTDOOR_ID });
+		assert.equal(key.lastTitle, "No data\nGarden");
+	});
+
+	it("keeps the bare No data for a fixed key (nothing followed)", async () => {
+		const { keys } = setup();
+		const key = new RecordingKeySurface("fixed");
+		await keys.appear(key, { moduleKey: makeModuleKey(STATION_ID, OUTDOOR_ID), metric: "co2" }, "temperature");
+		assert.equal(key.lastTitle, "No data");
+	});
+
+	it("ignores a label: it would name one sensor on a key that moves", async () => {
+		const { keys, store } = setup();
+		const key = new RecordingKeySurface("sf");
+		await keys.appear(key, { metric: "humidity", label: "Bedroom" }, SENSOR);
+		store.set({ ...here, moduleId: OUTDOOR_ID });
+		assert.match(key.lastTitle ?? "", /^80\s*%\nGarden/);
+		assert.doesNotMatch(key.lastTitle ?? "", /Bedroom/);
+	});
+
+	it("a fixed key with Follow focus ignores its label, one without keeps it", async () => {
+		const { keys, store } = setup();
+		const following = new RecordingKeySurface("following");
+		const fixed = new RecordingKeySurface("fixed");
+		const moduleKey = makeModuleKey(STATION_ID, BASE_ID);
+		await keys.appear(following, { moduleKey, label: "Bedroom", followFocus: true, metric: "humidity" }, "temperature");
+		await keys.appear(fixed, { moduleKey, label: "Bedroom", metric: "humidity" }, "temperature");
+		store.set({ ...here, moduleId: OUTDOOR_ID });
+		assert.match(following.lastTitle ?? "", /\nGarden/);
+		assert.match(fixed.lastTitle ?? "", /\nBedroom/);
+	});
+
 	it("the Next/Previous Value state of the focus display still moves it (the difference)", async () => {
 		const { keys, store } = setup();
 		const display = new RecordingKeySurface("display");
@@ -128,6 +164,12 @@ describe("sensor focus key", () => {
 });
 
 describe("sensor focus metric dropdown", () => {
+	it("remembers at most MAX_TRACKED_ACTION_SETTINGS all-metrics actions: the oldest makes room", () => {
+		for (let i = 0; i < MAX_TRACKED_ACTION_SETTINGS + 5; i++) rememberAllMetricsAction(`am-${i}`);
+		assert.equal(isRememberedAllMetricsAction("am-0"), false);
+		assert.equal(isRememberedAllMetricsAction(`am-${MAX_TRACKED_ACTION_SETTINGS + 4}`), true);
+	});
+
 	it("offers ALL display metrics even where the focused sensor reports few, and forgets on disappear", async () => {
 		const { keys, env } = setup({ stationId: STATION_ID, moduleId: OUTDOOR_ID, metric: "temperature" });
 		const key = new RecordingKeySurface("sf-1");

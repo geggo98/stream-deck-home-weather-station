@@ -13,7 +13,7 @@
 
 <body>
 	<p class="pi-hint">
-		This key always shows the sensor that the focus points at (moved by the Next/Previous Sensor and Station keys and the dial). You choose the value; the Next/Previous Value keys do not change it. Where the sensor does not measure the value, the key says No data. The Focus display key follows the value as well.
+		This key always shows the sensor that the focus points at (moved by the Next/Previous Sensor and Station keys and the dial). You choose the value; the Next/Previous Value keys do not change it. Where the sensor does not measure the value, the key says No data and the name of that sensor. The key shows the sensor name from your account (there is no label: it would hide which sensor the key shows). The Next/Previous Sensor keys move this key, but they only visit sensors that report the value the focus is on right now (shown by a Focus display key), not this key's value. The Focus display key follows the value as well.
 	</p>
 
 	<sdpi-item label="Metric">
@@ -44,11 +44,6 @@
 		Draws the number into the key image instead of using the native key title. Experimental: not yet
 		checked on real hardware. Switch it off if the key looks wrong.
 	</p>
-
-	<sdpi-item label="Label">
-		<sdpi-textfield setting="label" placeholder="Module name" maxlength="9"></sdpi-textfield>
-	</sdpi-item>
-	<p class="pi-hint">Replaces the sensor name on the key. Leave empty to use the name from the account.</p>
 
 	<div class="pi-account-title">Alerts</div>
 	<div id="alertBlock">

@@ -54,6 +54,18 @@ hand.
    missing nested pin; after the fix and a re-run of the failed job the asset was attached and
    `gh attestation verify` accepted it.
 
+   **If `upload` (or `build`) fails after the tag and release exist**, the release stays
+   without an asset until the job is repeated. Open the failed run on the Actions page and use
+   "Re-run failed jobs", or run `gh run rerun <run-id> --failed`. Do this within one day: the
+   hand-over artifact has `retention-days: 1`, and a re-run of `upload` needs it (a re-run of
+   `build` should make a new one, UNVERIFIED). Re-running the whole workflow or merging again does not help:
+   release-please sees the release as done and does not report it as created again. If the
+   cause was a missing allow-list entry, as in v0.1.1, fix it first (`npm run github:settings --
+   --check`, then `--apply` after review): an action pinned in a workflow, or called by a
+   pinned action, must be on the allow-list by its exact SHA; Dependabot bumps of
+   `attest-build-provenance` can change the nested pin without any CI job noticing, because
+   `ci.yml` never runs the attest step.
+
 Pre-1.0 (`0.y.z`): `fix:`/`perf:` bump patch, `feat:` bumps minor, `feat!:` also minor.
 
 ### Repository settings (as code)
@@ -64,7 +76,9 @@ The settings are kept in `scripts/github-settings.py` and were applied with
 
 - **Actions allow-list = the pins.** Only the actions pinned in `.github/workflows/*.yml` may
   run (plus the pinned actions that composite actions call themselves, `TRANSITIVE_PINS` in the
-  script: `attest-build-provenance` calls `actions/attest`, which the first release run revealed),
+  script: `attest-build-provenance` calls `actions/attest`, which the first release run revealed;
+  each entry is keyed by the wrapper's exact pin, so a bump of the wrapper makes
+  `tests/github-settings.test.ts` fail until the nested pin is re-resolved),
   each by its exact commit SHA; nothing GitHub-owned or "verified" is allowed by default,
   and *Require actions to be pinned to a full-length commit SHA* is on. The allow-list is
   generated from the workflows, so it cannot drift from them (`tests/github-settings.test.ts`).

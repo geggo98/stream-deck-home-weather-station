@@ -57,16 +57,24 @@ def workflow_pins() -> list[str]:
 
 
 # Actions that composite actions in our workflows call themselves. GitHub checks these against the
-# allow-list too (and refused the first release run for exactly this reason). Each entry: the pin as
-# the wrapper pins it, and which workflow action brings it in. Re-check when the wrapper's pin changes:
+# allow-list too (and refused the first release run for exactly this reason). Keyed by the EXACT pin
+# of the wrapper in the workflows; the value is the nested pin that wrapper uses. When Dependabot bumps
+# the wrapper, the key no longer matches the workflow and tests/github-settings.test.ts fails until the
+# nested pin is re-resolved (and this entry replaced):
 #   gh api "repos/<owner>/<repo>/contents/action.yml?ref=<sha>" --jq .content | base64 -d | grep uses:
 TRANSITIVE_PINS = {
-	# nested by actions/attest-build-provenance@4d101475... (v4.2.2); itself a node action, v4.2.1
-	"actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d": "actions/attest-build-provenance",
+	# actions/attest-build-provenance v4.2.2 nests actions/attest v4.2.1 (itself a node action)
+	"actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8": "actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d",
 }
 
 
+def nested_pins(pins: list[str]) -> list[str]:
+	"""The nested pins of those wrappers whose exact pin is in `pins`."""
+	return sorted(nested for wrapper, nested in TRANSITIVE_PINS.items() if wrapper in pins)
+
+
 def plan() -> dict:
+	pins = workflow_pins()
 	return {
 		"repository": {
 			"has_wiki": False,
@@ -91,9 +99,9 @@ def plan() -> dict:
 		"selected_actions": {
 			"github_owned_allowed": False,
 			"verified_allowed": False,
-			"patterns_allowed": sorted(set(workflow_pins()) | set(TRANSITIVE_PINS)),
+			"patterns_allowed": sorted(set(pins) | set(nested_pins(pins))),
 		},
-		"transitive_pins": TRANSITIVE_PINS,
+		"transitive_pins": {wrapper: nested for wrapper, nested in TRANSITIVE_PINS.items() if wrapper in pins},
 		"workflow_permissions": {"default_workflow_permissions": "read", "can_approve_pull_request_reviews": True},
 		"fork_pr_approval": {"approval_policy": "all_external_contributors"},
 		"toggles": {

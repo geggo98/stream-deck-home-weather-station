@@ -183,7 +183,7 @@ export function buildNavView(input: NavViewInput): NavView {
 		const id = displayMetricOf(preview.focus.metric);
 		const def = id ? METRICS[id] : undefined;
 		if (preview.blocked || !def) return dimmed(def?.glyph ?? glyph, "Only one\nvalue");
-		return { svg: composeTile({ glyph: def.glyph, accent: NAV_ACCENT, status: okStatus }), title: `${arrow} ${def.label}`, blocked: false };
+		return { svg: composeTile({ glyph: def.glyph, accent: NAV_ACCENT, status: okStatus }), title: `${arrow} ${def.shortLabel ?? def.label}`, blocked: false };
 	}
 	if (input.kind === "next-sensor" || input.kind === "prev-sensor") {
 		if (preview.blocked || !target) return dimmed(glyph, "No other\nsensor");
