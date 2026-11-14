@@ -20,6 +20,17 @@ const pkg = JSON.parse(readFileSync(new URL("package.json", ROOT), "utf-8")) as 
 /** Words that must not appear in identifying manifest fields. */
 const BRAND_WORDS = /netatmo|elgato|stream\s*deck|streamdeck|corsair|plugin/i;
 
+/** -1, 0 or 1 for MAJOR.MINOR.PATCH strings (numeric per part). */
+function compareVersions(a: string, b: string): number {
+	const pa = a.split(".").map(Number);
+	const pb = b.split(".").map(Number);
+	for (let i = 0; i < 3; i++) {
+		const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+		if (d !== 0) return d < 0 ? -1 : 1;
+	}
+	return 0;
+}
+
 describe("shipped manifest", () => {
 	it("has no Nodejs.Debug key", () => {
 		const nodejs = (manifest.Nodejs ?? {}) as { Debug?: unknown };
@@ -40,9 +51,21 @@ describe("shipped manifest", () => {
 		]);
 	});
 
-	it("has a 4-part version that mirrors package.json", () => {
-		assert.match(manifest.Version, /^\d+\.\d+\.\d+\.\d+$/);
-		assert.equal(manifest.Version, `${pkg.version.split(/[-+]/)[0]}.0`);
+	// The committed manifest may LAG package.json by one release: release-please bumps package.json in the
+	// release PR and `npm run build` (sync-manifest-version.ts) derives the 4-part manifest version from it,
+	// so the packed file is always right (docs/PUBLISHING.md). What must never happen: the manifest AHEAD of
+	// package.json, or a version the Stream Deck CLI rejects (not four numeric parts, build number not 0).
+	it("has a 4-part version that is never ahead of package.json (it may lag one release until the next build)", () => {
+		assert.match(manifest.Version, /^\d+\.\d+\.\d+\.0$/, "four numeric parts with build number 0, as the build writes it");
+		const wanted = pkg.version.split(/[-+]/)[0] as string;
+		assert.ok(compareVersions(manifest.Version.replace(/\.0$/, ""), wanted) <= 0, `manifest ${manifest.Version} is ahead of package.json ${pkg.version}`);
+	});
+
+	it("the version comparison used above can fail (negative control)", () => {
+		assert.equal(compareVersions("0.1.2", "0.1.3"), -1);
+		assert.equal(compareVersions("0.1.3", "0.1.3"), 0);
+		assert.equal(compareVersions("0.2.0", "0.1.9"), 1);
+		assert.equal(compareVersions("1.0.0", "0.99.99"), 1);
 	});
 
 	it("keeps brand words out of Name, Category, Author, UUIDs and the folder name", () => {

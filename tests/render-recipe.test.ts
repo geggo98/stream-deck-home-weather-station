@@ -75,11 +75,29 @@ function scenario(jobs: unknown[] = JOBS) {
 	const env = { ...process.env, FAKE_LOG: log };
 	const run = (extra: string[] = [], mode = "ok") =>
 		spawnSync("python3", [...base, ...extra, jobsFile, out], { env: { ...env, FAKE_MODE: mode }, encoding: "utf8", timeout: 60_000 });
-	const calls = () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)) : []);
+	// The fake codex appends to this file while the test polls it (waitFor): a half-written last line
+	// is not a call yet. Only newline-terminated lines count. (On a macOS CI runner the read once landed
+	// mid-write and JSON.parse threw "Unexpected end of JSON input".)
+	const calls = () => {
+		if (!existsSync(log)) return [];
+		const raw = readFileSync(log, "utf8");
+		const complete = raw.slice(0, raw.lastIndexOf("\n") + 1);
+		return complete.split("\n").filter((l) => l.length > 0).map((l) => JSON.parse(l));
+	};
 	return { dir, jobsFile, out, log, base, env, run, calls };
 }
 
 describe("render-with-codex.py", () => {
+	it("the call log helper ignores a half-written last line instead of throwing (macOS CI flake)", () => {
+		const s = scenario();
+		writeFileSync(s.log, '{"call":1}\n{"call":2}\n{"call":');
+		assert.deepEqual(s.calls(), [{ call: 1 }, { call: 2 }]);
+		writeFileSync(s.log, '{"call":1}\n{"call":2}\n{"call":3}\n');
+		assert.equal(s.calls().length, 3, "a finished line counts as soon as its newline is there");
+		writeFileSync(s.log, "");
+		assert.deepEqual(s.calls(), []);
+	});
+
 	it("renders, validates and publishes atomically, then skips on the second run", () => {
 		const s = scenario();
 		const r1 = s.run();

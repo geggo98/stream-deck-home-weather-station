@@ -135,6 +135,8 @@ tests/*.test.ts          flat directory, so the unquoted glob stays portable
   Do not commit or push unless asked.
 - Comments explain WHY and carry measured or sourced facts. Prefer small pure functions with unit tests.
 - Use `npm ci`; a dependency change is a
-  supply-chain decision (14-day cooldown in Dependabot, `osv-scanner`).
+  supply-chain decision (7-day cooldown in Dependabot and in `.npmrc`, `osv-scanner`). Before merging a
+  Dependabot PR check the publication date of every updated version (`npm view <pkg> time --json`): none may be
+  younger than 7 days, and a major bump of the Stream Deck SDK needs a run in the Stream Deck app, not only CI.
 - Never edit `osv-scanner.toml` to silence a new finding without a reason and an `ignoreUntil` date.
 - Releases: GitHub Releases only, never the Elgato Marketplace ([docs/PUBLISHING.md](docs/PUBLISHING.md)).

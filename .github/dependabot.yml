@@ -6,10 +6,11 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
-    # Wait 14 days after a release before proposing it (let early regressions
-    # surface first).
+    # Wait 7 days after a release before proposing it (supply-chain risk: a hijacked or
+    # broken release is usually pulled within days). The same rule applies to `npm install`
+    # through .npmrc (min-release-age). tests/supply-chain.test.ts pins both.
     cooldown:
-      default-days: 14
+      default-days: 7
     commit-message:
       prefix: ci
     # One combined PR per run instead of one per action.
@@ -23,9 +24,9 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
-    # Wait 14 days after a release before proposing it.
+    # Wait 7 days after a release before proposing it (see above).
     cooldown:
-      default-days: 14
+      default-days: 7
     commit-message:
       prefix: build
       prefix-development: build
