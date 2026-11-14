@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.4](https://github.com/geggo98/stream-deck-home-weather-station/compare/v0.1.3...v0.1.4) (2026-11-14)
+
+
+### Bug Fixes
+
+* harden flaky tests and set a 7-day dependency cooldown ([f5d8f3e](https://github.com/geggo98/stream-deck-home-weather-station/commit/f5d8f3e80d5e01ff8f865426a86481b1dbcbda8a))
+
+
+### Build System
+
+* bump the npm-dependencies group across 1 directory with 4 updates ([#5](https://github.com/geggo98/stream-deck-home-weather-station/issues/5)) ([199af57](https://github.com/geggo98/stream-deck-home-weather-station/commit/199af570de3ce75547b05ca5ee158deaa711179d))
+
 ## [0.1.3](https://github.com/geggo98/stream-deck-home-weather-station/compare/v0.1.2...v0.1.3) (2026-11-14)
 
 
