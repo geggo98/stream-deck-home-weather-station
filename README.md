@@ -58,7 +58,12 @@ Stations upload about every 10 minutes, so no key can be "more live" than that.
 | Auto Rotate | Toggle: steps through the values of the focused sensor every few seconds (default 8, 3 to 60). Runs only while the key is visible. |
 | Data Age and Battery | Cycles data age and battery level of the focused sensor (where it reports one). There is no radio-signal page. Shows `Only one value` when the sensor has nothing to cycle. |
 | History | Day curve of the focused value; each press cycles 6 h, 24 h and 3 days. Needs one extra API request per visible key and window (about 6 per hour while visible, cached for 10 minutes). |
-| Weather Dial | Rotate: next value. Push: next sensor. Rotate while pushed: next station. Touch tap: reload. Long touch cycles value, min/max (temperature only), 24 h mini history (where available) and back to the value. |
+| Sensor Dial | Rotate: next / previous sensor (module of the station), chosen with the dial's own value, so a rain or wind Sensor Dial reaches the rain and wind modules. Push: reload. Rotate while pushed: next / previous station. It shows the value chosen in its own settings (default temperature) of the sensor it points at. Touch tap: reload. Long touch cycles value, min/max (temperature only), 24 h mini history (where available) and back to the value. |
+| Value Dial | Rotate: next / previous value of the sensor. Push: reload. Rotate while pushed: next / previous sensor. Follows sensor AND value of the focus, or, with the checkbox unticked ("only this dial"), its own module and value. Touch as on the Sensor Dial. |
+| Custom Dial | The gestures are yours: in its Property Inspector you assign rotate, rotate while pushed and push each one of value, sensor, station, reload or nothing. Defaults: rotate = value, rotate while pushed = station, push = sensor (the former Weather Dial behaviour; existing profiles keep working). Displays like the Value Dial. Touch as on the Sensor Dial. |
+
+
+All three dials share one switch, the checkbox "Rotation changes the shared focus" (ticked by default: all following keys move too). Unticked, the rotation changes only what this dial shows ("only this dial"). Which of the three dials you pick decides what the rotation does; the checkbox decides what it changes: the focus, or only the dial's own display. Tap on the strip (reload) and long touch (value, min/max, history) are the same on all three. There are 22 actions in total.
 
 Every action has the account section in its Property Inspector (client id, secret, sign-in
 and status), including Reload and the Next/Previous keys, so you can set the plugin up from
@@ -78,11 +83,14 @@ Who follows what:
   key stays a CO2 key and says `No data` where the focused sensor has no CO2). Its alert
   thresholds stay valid. A custom label is ignored while it follows (the key shows the name
   of the followed sensor), and where the sensor lacks the value the `No data` face names it.
-- History and Weather Dial follow the whole focus (station, sensor and value) by default;
-  with "follow focus" off they keep their own module and value.
-- **Known limitation: Next/Previous Sensor and the dial's push only visit sensors that report
-  the focused value.** They skip every module that does not measure the value of the focus
-  (the value focus, which Next/Previous Value and the dial's rotation set). So a Sensor Focus
+- History follows the whole focus (station, sensor and value) by default; with "follow focus" off it keeps its own module and value.
+- The three dials have the checkbox "Rotation changes the shared focus" (setting `followFocus`, default: the shared focus).
+  - Sensor Dial, checkbox ticked: follows the focus's station and sensor only and keeps its own value (like Sensor Focus). Rotation moves the shared focus, so all following keys move too. When it writes to the focus it keeps the focus's value if the new sensor reports it, otherwise it uses the dial's own value.
+  - Sensor Dial, checkbox unticked ("only this dial"): shows its own sensor (adopted from the focus on first use) with its own value; rotation changes only the dial, never the focus.
+  - Value Dial, checkbox ticked: follows sensor AND value of the focus, like Focus Display; rotation moves the shared focus's value.
+  - Value Dial, checkbox unticked ("only this dial"): own sensor and own value; rotation changes only the dial's own value.
+  - Custom Dial: displays as the Value Dial (follows sensor and value of the focus, or its own when the checkbox is unticked); what rotate, rotate while pushed and push do is set per gesture.
+- **Known limitation: Next/Previous Sensor keys only visit sensors that report the focused value.** They skip every module that does not measure the value of the focus (the value focus, which Next/Previous Value and the dials' value rotation set). The Sensor Dial does not have this limitation: it chooses the next sensor with its own value, so a rain or wind Sensor Dial reaches the rain and wind modules. So a Sensor Focus
   key, or a fixed key with "Follow focus", that shows a value the focus does not currently
   have cannot reach every sensor. Example: with a temperature focus the keys never stop on a
   rain or wind module, because those report no temperature. Next/Previous Value only cycles
@@ -92,12 +100,9 @@ Who follows what:
   wind) cannot be reached by navigation at all; show it with a fixed key that has a module
   chosen and "Follow focus" off. This is a limitation of the navigation rules, not a problem
   with your station's data.
-- The sensor and station navigation keys and the dial's push (sensor) and push-rotate
-  (station) move the sensor focus. Next/Previous Value and the dial's rotation move the
-  value focus.
+- The sensor and station navigation keys and the dials' sensor and station gestures move the sensor focus (with the checkbox ticked). Next/Previous Value and the dials' value gesture move the value focus.
 
-None of this has been tried on Stream Deck
-hardware yet **[unverified]**.
+None of this has been tried on Stream Deck hardware yet **[unverified]**. That includes all three dials: they are UNVERIFIED on a real Stream Deck + and the Virtual Stream Deck may not offer dials at all.
 
 ### Supported metrics
 

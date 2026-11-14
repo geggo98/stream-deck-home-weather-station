@@ -24,11 +24,13 @@ export interface KeypadSpec {
 }
 
 export interface DialSpec {
-	readonly id: "weather-dial";
+	readonly id: "weather-dial" | "weather-dial-sensor" | "weather-dial-value";
+	/** Which gesture set the controller uses (see dial-controller.ts). */
+	readonly mode: "sensor" | "value" | "custom";
 	readonly name: string;
 	readonly tooltip: string;
 	readonly glyph: GlyphName;
-	readonly propertyInspector: "ui/dial.html";
+	readonly propertyInspector: "ui/dial.html" | "ui/dial-sensor.html" | "ui/dial-value.html";
 	/** Built-in layout: icon, title, value, indicator bar. */
 	readonly encoderLayout: "$B1";
 	readonly trigger: { readonly Push: string; readonly Rotate: string; readonly Touch: string };
@@ -52,15 +54,46 @@ export const KEYPAD_SPECS = [
 	{ id: "wind", name: "Wind", tooltip: "Shows the wind speed and direction. Press to request fresh data (at most once a minute).", glyph: "wind", metric: "wind", propertyInspector: PI_KEY },
 ] as const satisfies readonly KeypadSpec[];
 
+const DIAL_SWITCH = "The switch decides what a turn changes: the shared focus (all following keys move too) or only what this dial shows.";
+const DIAL_TOUCH = "Tap the strip to request fresh data (at most once a minute), hold it for minimum and maximum or the 24 hour history.";
+const DIAL_TOUCH_TRIGGER = "Tap: reload (once a minute at most), hold: min/max or history";
+
+/** The Custom Dial keeps the id and UUID of the original dial, so profiles that use it keep working. */
 export const DIAL_SPEC = {
 	id: "weather-dial",
-	name: "Weather Dial",
-	tooltip: "Turn for the next value, press for the next sensor, turn while pressed for the next station. Tap the strip to request fresh data (at most once a minute), hold it for minimum and maximum or the 24 hour history.",
+	mode: "custom",
+	name: "Custom Dial",
+	tooltip: `Freely configurable: choose what turn, turn while pressed and press do (value, sensor, station, reload or nothing). Default: turn for the next value, press for the next sensor, turn while pressed for the next station. ${DIAL_SWITCH} ${DIAL_TOUCH}`,
 	glyph: "circle-gauge",
 	propertyInspector: "ui/dial.html",
 	encoderLayout: "$B1",
-	trigger: { Push: "Next sensor", Rotate: "Next value (pressed: next station)", Touch: "Tap: reload (once a minute at most), hold: min/max or history" },
+	trigger: { Push: "Configurable (default: next sensor)", Rotate: "Configurable (default: next value; pressed: next station)", Touch: DIAL_TOUCH_TRIGGER },
 } as const satisfies DialSpec;
+
+export const SENSOR_DIAL_SPEC = {
+	id: "weather-dial-sensor",
+	mode: "sensor",
+	name: "Sensor Dial",
+	tooltip: `Turn for the next sensor, turn while pressed for the next station, press to request fresh data. Shows the value you choose in its settings for the sensor it points at. ${DIAL_SWITCH} ${DIAL_TOUCH}`,
+	glyph: "radar",
+	propertyInspector: "ui/dial-sensor.html",
+	encoderLayout: "$B1",
+	trigger: { Push: "Reload (once a minute at most)", Rotate: "Next sensor (pressed: next station)", Touch: DIAL_TOUCH_TRIGGER },
+} as const satisfies DialSpec;
+
+export const VALUE_DIAL_SPEC = {
+	id: "weather-dial-value",
+	mode: "value",
+	name: "Value Dial",
+	tooltip: `Turn for the next value of the sensor, turn while pressed for the next sensor, press to request fresh data. ${DIAL_SWITCH} ${DIAL_TOUCH}`,
+	glyph: "ruler",
+	propertyInspector: "ui/dial-value.html",
+	encoderLayout: "$B1",
+	trigger: { Push: "Reload (once a minute at most)", Rotate: "Next value (pressed: next sensor)", Touch: DIAL_TOUCH_TRIGGER },
+} as const satisfies DialSpec;
+
+/** The three dial actions: sensor, value, custom. */
+export const DIAL_SPECS = [SENSOR_DIAL_SPEC, VALUE_DIAL_SPEC, DIAL_SPEC] as const satisfies readonly DialSpec[];
 
 /**
  * What a focus-family key does. `display` and `history` are measurement-like (they have
@@ -117,9 +150,10 @@ export const FOCUS_SPECS = [
 
 export type KeypadId = (typeof KEYPAD_SPECS)[number]["id"];
 export type FocusId = (typeof FOCUS_SPECS)[number]["id"];
-export type ActionId = KeypadId | FocusId | typeof DIAL_SPEC.id;
+export type DialId = (typeof DIAL_SPECS)[number]["id"];
+export type ActionId = KeypadId | FocusId | DialId;
 
-export const ACTION_IDS: readonly ActionId[] = [...KEYPAD_SPECS.map((s) => s.id), ...FOCUS_SPECS.map((s) => s.id), DIAL_SPEC.id];
+export const ACTION_IDS: readonly ActionId[] = [...KEYPAD_SPECS.map((s) => s.id), ...FOCUS_SPECS.map((s) => s.id), ...DIAL_SPECS.map((s) => s.id)];
 
 /** Action UUID: plugin id + "." + catalog id. Only known ids compile, so typos cannot drift. */
 export function uuidFor(id: ActionId): string {
@@ -145,5 +179,5 @@ export function keyImagePath(id: ActionId): string {
 
 /** Every glyph the catalog itself needs, for the icon generator. */
 export function catalogGlyphs(): GlyphName[] {
-	return [...KEYPAD_SPECS.map((s) => s.glyph), ...FOCUS_SPECS.map((s) => s.glyph), DIAL_SPEC.glyph];
+	return [...KEYPAD_SPECS.map((s) => s.glyph), ...FOCUS_SPECS.map((s) => s.glyph), ...DIAL_SPECS.map((s) => s.glyph)];
 }

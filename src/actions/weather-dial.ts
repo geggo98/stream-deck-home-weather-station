@@ -1,6 +1,11 @@
 /**
- * The weather dial: rotate = next/previous value, push = next sensor, rotate while pushed =
- * next station, tap = reload, long touch = min/max or history (see dial-controller.ts).
+ * The dial actions share one implementation (dial-controller.ts); this file holds the shared
+ * event wiring and the Custom Dial (id weather-dial, the UUID of the original dial). The Sensor
+ * Dial and the Value Dial are thin classes in weather-dial-sensor.ts and weather-dial-value.ts,
+ * each with its own literal @action decorator.
+ *
+ * Custom Dial: turn, turn while pressed and press do what the settings say (default: next value,
+ * next station, next sensor); tap = reload, long touch = min/max or history.
  * Content goes out via `setFeedback` into the built-in `$B1` layout (see render/dial-feedback.ts);
  * the history view switches the strip to the custom layout `layouts/history-strip.json` and back.
  *
@@ -23,12 +28,12 @@ import {
 } from "@elgato/streamdeck";
 import type { JsonValue } from "@elgato/utils";
 import type { DialFeedbackPayload, HistoryStripPayload } from "../render/dial-feedback.ts";
-import { DIAL_SPEC, uuidFor } from "./catalog.ts";
-import type { DialSurface } from "./dial-controller.ts";
+import { uuidFor } from "./catalog.ts";
+import type { DialMode, DialSurface } from "./dial-controller.ts";
 import type { KeySettings } from "./measurement-keys.ts";
 import { dialController, routePiMessage } from "./runtime.ts";
 
-function surfaceOf(dial: DialAction<KeySettings>): DialSurface {
+export function dialSurfaceOf(dial: DialAction<KeySettings>): DialSurface {
 	return {
 		id: dial.id,
 		setFeedback: (payload: DialFeedbackPayload | HistoryStripPayload) => dial.setFeedback(payload),
@@ -37,11 +42,13 @@ function surfaceOf(dial: DialAction<KeySettings>): DialSurface {
 	};
 }
 
-@action({ UUID: uuidFor(DIAL_SPEC.id) })
-export class WeatherDialAction extends SingletonAction<KeySettings> {
+/** Event wiring of all three dials; a subclass names its mode and carries its own @action decorator. */
+export abstract class DialActionBase extends SingletonAction<KeySettings> {
+	protected abstract readonly mode: DialMode;
+
 	override async onWillAppear(ev: WillAppearEvent<KeySettings>): Promise<void> {
 		if (!ev.action.isDial()) return;
-		await dialController().appear(surfaceOf(ev.action), ev.payload.settings);
+		await dialController().appear(dialSurfaceOf(ev.action), ev.payload.settings, this.mode);
 	}
 
 	override onDidReceiveSettings(ev: DidReceiveSettingsEvent<KeySettings>): void {
@@ -72,4 +79,10 @@ export class WeatherDialAction extends SingletonAction<KeySettings> {
 	override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, KeySettings>): Promise<void> {
 		await routePiMessage(ev.action.id, ev.payload);
 	}
+}
+
+/** The Custom Dial: gestures from its settings. */
+@action({ UUID: uuidFor("weather-dial") })
+export class WeatherDialAction extends DialActionBase {
+	protected readonly mode = "custom";
 }

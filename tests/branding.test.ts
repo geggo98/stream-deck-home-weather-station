@@ -218,7 +218,7 @@ test("checker validation: a branded Property Inspector heading is flagged", () =
 
 test("Property Inspector headings and titles are brand-free (descriptive hints may name the brand)", () => {
 	const dir = join(root, "de.schwetschke.sd.home-weather-station.sdPlugin", "ui");
-	for (const f of ["measurement.html", "dial.html"]) {
+	for (const f of ["measurement.html", "dial.html", "dial-sensor.html", "dial-value.html"]) {
 		const { headings, violations } = piHeadingViolations(readFileSync(join(dir, f), "utf8"));
 		assert.ok(headings >= 2, `${f}: only ${headings} headings seen, the pattern may be broken`);
 		assert.deepEqual(violations, [], f);

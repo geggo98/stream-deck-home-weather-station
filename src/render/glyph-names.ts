@@ -16,8 +16,10 @@ export const GLYPH_NAMES = [
 	"gauge",
 	"cloud-rain",
 	"wind",
-	// dial action
+	// dial actions
 	"circle-gauge",
+	"radar",
+	"ruler",
 	// focus family: catalog glyphs
 	"crosshair",
 	"locate-fixed",

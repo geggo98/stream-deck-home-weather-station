@@ -12,7 +12,7 @@
  */
 
 import {
-	DIAL_SPEC,
+	DIAL_SPECS,
 	FOCUS_SPECS,
 	KEYPAD_SPECS,
 	PLUGIN_ID,
@@ -97,21 +97,21 @@ export function buildActions(): ManifestAction[] {
 		if ("propertyInspector" in spec) action.PropertyInspectorPath = spec.propertyInspector;
 		return action;
 	});
-	const dial: ManifestAction = {
-		Name: DIAL_SPEC.name,
-		UUID: uuidFor(DIAL_SPEC.id),
-		Icon: iconPath(DIAL_SPEC.id),
-		Tooltip: DIAL_SPEC.tooltip,
+	const dials: ManifestAction[] = DIAL_SPECS.map((spec) => ({
+		Name: spec.name,
+		UUID: uuidFor(spec.id),
+		Icon: iconPath(spec.id),
+		Tooltip: spec.tooltip,
 		Controllers: ["Encoder"],
-		PropertyInspectorPath: DIAL_SPEC.propertyInspector,
-		States: states(DIAL_SPEC.id),
+		PropertyInspectorPath: spec.propertyInspector,
+		States: states(spec.id),
 		Encoder: {
-			layout: DIAL_SPEC.encoderLayout,
-			Icon: iconPath(DIAL_SPEC.id),
-			TriggerDescription: { ...DIAL_SPEC.trigger },
+			layout: spec.encoderLayout,
+			Icon: iconPath(spec.id),
+			TriggerDescription: { ...spec.trigger },
 		},
-	};
-	return [...keys, ...focus, dial];
+	}));
+	return [...keys, ...focus, ...dials];
 }
 
 /**

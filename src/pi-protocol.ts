@@ -122,6 +122,8 @@ export interface DatasourceMessage {
 }
 
 /** Per-action settings (stored by Stream Deck, plain JSON, no secrets). */
+export type DialGesture = "value" | "sensor" | "station" | "reload" | "none";
+
 export interface MeasurementSettings {
 	/** "<stationId>|<moduleId>" chosen in the PI; absent (undefined) = adopt a module that reports the key's measurement on first use; "" = deliberately cleared, the key then shows "Pick module". */
 	moduleKey?: string;
@@ -134,6 +136,16 @@ export interface MeasurementSettings {
 	bigText?: boolean;
 	/** Optional user label overriding the module name. */
 	label?: string;
+	/**
+	 * Dials: what a gesture of the "Custom Dial" does (the other two dial types have fixed gestures).
+	 * "value" = next/previous measurement, "sensor" = next/previous sensor, "station" = next/previous
+	 * station, "reload" = ask for fresh data, "none" = nothing. Defaults: rotate "value",
+	 * rotate while pushed "station", push "sensor". Whether a gesture changes the shared focus or only
+	 * this dial is decided by `followFocus` (true, default for dials = the focus; false = only this dial).
+	 */
+	dialRotate?: DialGesture;
+	dialPressRotate?: DialGesture;
+	dialPush?: DialGesture;
 	/** true = behave like the focus display: follow the plugin-wide focus (station, sensor, value). */
 	followFocus?: boolean;
 	/** Alert thresholds in the key's DISPLAY unit; empty/undefined = off. */

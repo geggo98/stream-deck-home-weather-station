@@ -1,40 +1,51 @@
 /**
- * Behaviour of the weather dial (Stream Deck + encoder), SDK-free.
+ * Behaviour of the three dial actions (Stream Deck + encoder), SDK-free. One controller serves
+ * all three; the SDK class passes the MODE through `appear`:
  *
- *  - rotate:         next / previous value of the focused sensor (what that sensor reports)
- *  - push:           next sensor that reports the shown value
- *  - rotate pushed:  next / previous station
- *  - touch tap:      reload: ask the service for the newest cloud data (a running poll is
- *                    joined, else at most one real request per minute; it cannot make the
- *                    station measure)
- *  - touch hold:     cycle the strip: value -> today's min/max (where there are any) ->
- *                    mini history (where the value has one) -> value
+ *  - "sensor" (Sensor Dial):  rotate = next/previous sensor (module of the station, chosen by
+ *                             the dial's OWN metric), rotate pushed = next/previous station,
+ *                             push = reload. Shows the metric of its own settings.
+ *  - "value"  (Value Dial):   rotate = next/previous value, rotate pushed = next/previous
+ *                             sensor, push = reload.
+ *  - "custom" (Custom Dial):  the three gestures come from the settings dialRotate,
+ *                             dialPressRotate, dialPush ("value" | "sensor" | "station" |
+ *                             "reload" | "none"); defaults: value, station, sensor.
+ *  - touch tap:               reload: ask the service for the newest cloud data (a running poll is
+ *                             joined, else at most one real request per minute; it cannot make the
+ *                             station measure)
+ *  - touch hold:              cycle the strip: value -> today's min/max (where there are any) ->
+ *                             mini history (where the value has one) -> value
  *
- * By default the dial FOLLOWS the plugin-wide focus (setting `followFocus`, default true):
- * navigation moves the focus and every follower repaints. A pinned dial (`followFocus` off)
- * keeps its own module and value in its own settings, written after a short quiet period so
- * fast rotation does not hammer the settings store, and never touches the focus.
- * A dial without a focus store behaves as pinned.
+ * THE SWITCH (setting `followFocus`, default true), the same on all three:
+ *  - on: the dial shows what the plugin-wide focus points at and navigation moves the focus, so
+ *    every follower repaints. The Sensor Dial follows station and sensor of the focus but keeps
+ *    its own metric (like Sensor Focus); the other two follow sensor and value (like Focus Display).
+ *  - off ("only this dial"): the dial keeps its own module and value in its own settings, written
+ *    after a short quiet period so fast rotation does not hammer the settings store, and never
+ *    touches the focus.
+ * A dial without a focus store behaves as if the switch were off.
  */
 
-import type { ConnectionState, HistoryWindow } from "../adapter/station/types.ts";
+import type { ConnectionState, HistoryWindow, StationSnapshot } from "../adapter/station/types.ts";
 import {
 	displayMetricOf,
 	focusModuleKey,
 	metricKeyOf,
 	nextMetric,
 	nextModule,
+	nextModuleFor,
 	nextStation,
 	resolveFocus,
 	type Direction,
 	type Focus,
 	type NavResult,
 } from "../focus/navigate.ts";
-import { followFocusOf, historyWindowOf, type ActionSettings } from "../focus/settings.ts";
+import { dialGestureOf, followFocusOf, historyWindowOf, type ActionSettings } from "../focus/settings.ts";
 import { BUILT_IN_LAYOUT, buildDialFeedback, buildHistoryStrip, HISTORY_LAYOUT, type DialFeedbackPayload, type HistoryStripPayload } from "../render/dial-feedback.ts";
 import { historyRequestFor } from "../render/history-view.ts";
 import { HISTORY_METRIC, isDisplayMetricId, metricsReportedBy, METRICS, type DisplayMetricId } from "../render/metrics.ts";
 import { adoptionCandidate, findModule, makeModuleKey } from "../render/select.ts";
+import type { DialGesture } from "../pi-protocol.ts";
 import { ControllerBase, type BaseEntry, type BaseSurface, type ControllerEnv } from "./controller-base.ts";
 import { fireAndLog } from "./fire-and-log.ts";
 import { HistorySlot, isHistoryAskable } from "./history-slot.ts";
@@ -54,7 +65,34 @@ const MAX_TICKS_PER_EVENT = 12;
 
 type StripView = "value" | "minmax" | "history";
 
+/** Which of the three dial actions an entry is; passed through `appear` by the SDK class. */
+export type DialMode = "sensor" | "value" | "custom";
+
+/** What each gesture does. */
+interface GestureMap {
+	readonly rotate: DialGesture;
+	readonly pressRotate: DialGesture;
+	readonly push: DialGesture;
+}
+
+const SENSOR_DIAL: GestureMap = { rotate: "sensor", pressRotate: "station", push: "reload" };
+const VALUE_DIAL: GestureMap = { rotate: "value", pressRotate: "sensor", push: "reload" };
+/** The Custom Dial's defaults are what the one and only dial did before there were three. */
+const CUSTOM_DEFAULTS: GestureMap = { rotate: "value", pressRotate: "station", push: "sensor" };
+
+/** The gesture mapping of a mode; the Custom Dial reads its settings, the others are fixed. */
+export function gesturesOf(mode: DialMode, settings: ActionSettings): GestureMap {
+	if (mode === "sensor") return SENSOR_DIAL;
+	if (mode === "value") return VALUE_DIAL;
+	return {
+		rotate: dialGestureOf(settings.dialRotate, CUSTOM_DEFAULTS.rotate),
+		pressRotate: dialGestureOf(settings.dialPressRotate, CUSTOM_DEFAULTS.pressRotate),
+		push: dialGestureOf(settings.dialPush, CUSTOM_DEFAULTS.push),
+	};
+}
+
 interface DialEntry extends BaseEntry<DialSurface> {
+	readonly mode: DialMode;
 	/** Pinned face; undefined = first measurement the module reports. Unused while following. */
 	metric: DisplayMetricId | undefined;
 	view: StripView;
@@ -76,7 +114,7 @@ export interface DialControllerEnv extends ControllerEnv {
 const LOADING: ConnectionState = { kind: "loading" };
 const FALLBACK_METRIC: DisplayMetricId = "temperature";
 
-export class DialController extends ControllerBase<DialSurface, DialEntry> {
+export class DialController extends ControllerBase<DialSurface, DialEntry, DialMode> {
 	private readonly persistMs: number;
 
 	constructor(env: DialControllerEnv) {
@@ -84,7 +122,12 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 		this.persistMs = env.persistMs ?? PERSIST_METRIC_MS;
 	}
 
-	protected createEntry(surface: DialSurface, settings: ActionSettings): DialEntry {
+	/** `extra` is the mode of the action; without one the dial is the Custom Dial. */
+	override appear(surface: DialSurface, settings: ActionSettings, extra?: DialMode): Promise<void> {
+		return super.appear(surface, settings, extra);
+	}
+
+	protected createEntry(surface: DialSurface, settings: ActionSettings, extra: DialMode | undefined): DialEntry {
 		// The slot's callback names the entry it belongs to; it only runs later, after `entry` exists.
 		const slot = new HistorySlot({
 			fetch: (request) => this.env.getHistory?.(request),
@@ -95,6 +138,7 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 			},
 		});
 		const entry: DialEntry = {
+			mode: extra ?? "custom",
 			surface,
 			settings,
 			unsubscribe: undefined,
@@ -131,8 +175,18 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 		return selected ? metricsReportedBy(selected.module.values) : [];
 	}
 
+	/** The Sensor Dial's metric is a setting with a default; the others start on what the module reports first. */
 	private pinnedMetric(entry: DialEntry): DisplayMetricId {
+		if (entry.mode === "sensor") return entry.metric ?? FALLBACK_METRIC;
 		return entry.metric ?? this.reportedMetrics(entry)[0] ?? FALLBACK_METRIC;
+	}
+
+	protected override offersAllMetrics(entry: DialEntry): boolean {
+		return entry.mode === "sensor";
+	}
+
+	protected override presetMetric(entry: DialEntry): DisplayMetricId | undefined {
+		return entry.mode === "sensor" ? FALLBACK_METRIC : undefined;
 	}
 
 	/** What the dial shows now: the focus while following, its own choice otherwise. */
@@ -140,8 +194,11 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 		const own = { metric: this.pinnedMetric(entry), settings: entry.settings };
 		if (!this.follows(entry)) return own;
 		const focus = resolveFocus(this.env.getSource()?.getSnapshot(), this.env.focus?.get());
-		const metric = focus ? displayMetricOf(focus.metric) : undefined;
-		if (!focus || !metric) return own;
+		if (!focus) return own;
+		// The Sensor Dial follows station and sensor only; its metric stays its own.
+		if (entry.mode === "sensor") return { metric: own.metric, settings: { ...entry.settings, moduleKey: focusModuleKey(focus) } };
+		const metric = displayMetricOf(focus.metric);
+		if (!metric) return own;
 		return { metric, settings: { ...entry.settings, moduleKey: focusModuleKey(focus) } };
 	}
 
@@ -156,8 +213,8 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 		return { stationId: selected.station.id, moduleId: selected.module.id, metric: metricKeyOf(this.pinnedMetric(entry)) };
 	}
 
-	protected adoptionMetric(): DisplayMetricId {
-		return FALLBACK_METRIC;
+	protected adoptionMetric(entry: DialEntry): DisplayMetricId {
+		return entry.mode === "sensor" ? this.pinnedMetric(entry) : FALLBACK_METRIC;
 	}
 
 	protected forgetPainted(entry: DialEntry): void {
@@ -174,6 +231,12 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 
 	/** A settings echo of our own write must not drag the face back to an older value. */
 	protected override reconcileSettings(entry: DialEntry, incoming: ActionSettings): ActionSettings {
+		if (entry.mode === "sensor") {
+			// The metric is a plain setting here: the PI wins, and a module switch never resets it
+			// (a module without that metric shows "No data", and the dial only visits modules that have it).
+			entry.metric = isDisplayMetricId(incoming.metric) ? incoming.metric : undefined;
+			return incoming;
+		}
 		if (incoming.metric !== undefined && incoming.metric === entry.lastWrittenMetric) {
 			return { ...incoming, metric: entry.metric };
 		}
@@ -256,31 +319,60 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 			this.repaint(entry);
 			return;
 		}
-		const metric = displayMetricOf(focus.metric);
-		entry.metric = metric;
-		entry.settings = { ...entry.settings, moduleKey: makeModuleKey(focus.stationId, focus.moduleId), metric };
+		const moduleKey = makeModuleKey(focus.stationId, focus.moduleId);
+		if (entry.mode === "sensor") {
+			// Only the module moves; the metric is the dial's setting.
+			entry.settings = { ...entry.settings, moduleKey };
+		} else {
+			const metric = displayMetricOf(focus.metric);
+			entry.metric = metric;
+			entry.settings = { ...entry.settings, moduleKey, metric };
+		}
 		this.schedulePersist(entry);
 		this.repaint(entry);
 	}
 
-	/** Positive ticks go forward, negative backward; wraps around. While pushed, ticks move between stations. */
+	/** One step of a navigation gesture from `focus`; undefined = nothing to move to. */
+	private stepFrom(entry: DialEntry, snapshot: StationSnapshot, focus: Focus, gesture: DialGesture, dir: Direction): Focus | undefined {
+		let result: NavResult | undefined;
+		if (gesture === "value") result = nextMetric(snapshot, focus, dir);
+		else if (gesture === "station") result = nextStation(snapshot, focus, dir);
+		else if (gesture === "sensor") {
+			// The Sensor Dial moves by its OWN metric (so a rain dial reaches the rain module);
+			// the other dials by the value they show.
+			result = entry.mode === "sensor" ? nextModuleFor(snapshot, focus, this.pinnedMetric(entry), dir) : nextModule(snapshot, focus, dir);
+		}
+		return result && !result.blocked ? result.focus : undefined;
+	}
+
+	/** Run one gesture. `ticks` is how many steps a rotation asks for (1 for a push). */
+	private perform(entry: DialEntry, gesture: DialGesture, ticks: number): void {
+		if (gesture === "none") return;
+		if (gesture === "reload") {
+			void requestRefresh(this.env.getSource(), this.env.logger);
+			return;
+		}
+		const snapshot = this.env.getSource()?.getSnapshot();
+		let focus = this.currentFocus(entry);
+		if (!snapshot || !focus) return;
+		const dir: Direction = ticks > 0 ? 1 : -1;
+		let moved = false;
+		for (let i = 0; i < Math.min(Math.abs(Math.trunc(ticks)), MAX_TICKS_PER_EVENT); i++) {
+			const next = this.stepFrom(entry, snapshot, focus, gesture, dir);
+			if (!next) break;
+			focus = next;
+			moved = true;
+		}
+		if (moved) this.apply(entry, focus);
+	}
+
+	/** Positive ticks go forward, negative backward; wraps around. What a tick does depends on the mode and on whether the dial is pushed. */
 	rotate(actionId: string, ticks: number, pressed = false): void {
 		const entry = this.entries.get(actionId);
 		if (!entry || !Number.isFinite(ticks) || ticks === 0) return;
 		if (pressed) entry.rotatedWhilePressed = true;
-		const snapshot = this.env.getSource()?.getSnapshot();
-		let focus = this.currentFocus(entry);
-		if (!snapshot || !focus) return;
-		const step: (s: typeof snapshot, f: Focus, d: Direction) => NavResult | undefined = pressed ? nextStation : nextMetric;
-		const dir: Direction = ticks > 0 ? 1 : -1;
-		let moved = false;
-		for (let i = 0; i < Math.min(Math.abs(Math.trunc(ticks)), MAX_TICKS_PER_EVENT); i++) {
-			const result = step(snapshot, focus, dir);
-			if (!result || result.blocked) break;
-			focus = result.focus;
-			moved = true;
-		}
-		if (moved) this.apply(entry, focus);
+		const gestures = gesturesOf(entry.mode, entry.settings);
+		this.perform(entry, pressed ? gestures.pressRotate : gestures.rotate, ticks);
 	}
 
 	private schedulePersist(entry: DialEntry): void {
@@ -288,7 +380,7 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 		entry.persistTimer = setTimeout(() => {
 			entry.persistTimer = undefined;
 			if (this.entries.get(entry.surface.id) !== entry) return;
-			entry.lastWrittenMetric = entry.metric;
+			entry.lastWrittenMetric = entry.mode === "sensor" ? undefined : entry.metric;
 			fireAndLog(entry.surface.setSettings(entry.settings), this.env.logger, "setSettings");
 		}, this.persistMs);
 		entry.persistTimer.unref?.();
@@ -302,7 +394,7 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 		entry.rotatedWhilePressed = false;
 	}
 
-	/** The dial came up: a push without rotation means "next sensor". */
+	/** The dial came up: a push without rotation runs the push gesture (reload, or what the Custom Dial says). */
 	up(actionId: string): void {
 		const entry = this.entries.get(actionId);
 		if (!entry) return;
@@ -310,10 +402,7 @@ export class DialController extends ControllerBase<DialSurface, DialEntry> {
 		entry.pressed = false;
 		entry.rotatedWhilePressed = false;
 		if (rotated) return;
-		const snapshot = this.env.getSource()?.getSnapshot();
-		const focus = this.currentFocus(entry);
-		const result = snapshot && focus ? nextModule(snapshot, focus, 1) : undefined;
-		if (result && !result.blocked) this.apply(entry, result.focus);
+		this.perform(entry, gesturesOf(entry.mode, entry.settings).push, 1);
 	}
 
 	/** A complete push without rotation. */

@@ -25,6 +25,8 @@ import { createPiRouter } from "./actions/pi-router.ts";
 import { disposeControllers, setPiRouter } from "./actions/runtime.ts";
 import { getWeatherService, setWeatherService } from "./actions/service-holder.ts";
 import { WeatherDialAction } from "./actions/weather-dial.ts";
+import { SensorDialAction } from "./actions/weather-dial-sensor.ts";
+import { ValueDialAction } from "./actions/weather-dial-value.ts";
 import type { JsonValue } from "@elgato/utils";
 import { PI_EVENTS, type GlobalSettings, type PluginToPiMessage } from "./pi-protocol.ts";
 
@@ -59,6 +61,8 @@ setAdapterLogger(streamDeck.logger);
 
 for (const keyAction of createKeypadActions()) streamDeck.actions.registerAction(keyAction);
 for (const focusAction of createFocusActions()) streamDeck.actions.registerAction(focusAction);
+streamDeck.actions.registerAction(new SensorDialAction());
+streamDeck.actions.registerAction(new ValueDialAction());
 streamDeck.actions.registerAction(new WeatherDialAction());
 // The bundle test looks for this line: it comes after EVERY registration, and
 // `registerAction` throws for a UUID that is missing from the manifest.

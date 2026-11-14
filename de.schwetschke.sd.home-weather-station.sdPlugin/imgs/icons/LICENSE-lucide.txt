@@ -51,4 +51,4 @@ Feather project and are therefore additionally covered by the MIT notice above
 (Copyright (c) 2013-present Cole Bemis); the others fall under the ISC licence only.
 
 Feather-derived: arrow-down, arrow-right, arrow-up, chevrons-left, chevrons-right, circle-arrow-left, circle-arrow-right, circle-help, clock, crosshair, info, loader, triangle-alert
-ISC only:        arrow-down-to-line, arrow-up-to-line, battery-full, battery-low, battery-medium, chart-line, circle-gauge, cloud-rain, door-open, droplets, gauge, hourglass, house, leaf, locate-fixed, pause, refresh-cw, repeat, settings, step-back, step-forward, sun, thermometer, volume-2, wifi-off, wind
+ISC only:        arrow-down-to-line, arrow-up-to-line, battery-full, battery-low, battery-medium, chart-line, circle-gauge, cloud-rain, door-open, droplets, gauge, hourglass, house, leaf, locate-fixed, pause, radar, refresh-cw, repeat, ruler, settings, step-back, step-forward, sun, thermometer, volume-2, wifi-off, wind

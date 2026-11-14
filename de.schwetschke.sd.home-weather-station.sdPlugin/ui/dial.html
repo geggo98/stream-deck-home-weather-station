@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-	<title>Dial Settings</title>
+	<title>Custom Dial Settings</title>
 	<meta charset="utf-8" />
 	<meta http-equiv="Content-Security-Policy"
 		content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ws://127.0.0.1:* ws://localhost:*; base-uri 'none'; form-action 'none'" />
@@ -12,37 +12,71 @@
 </head>
 
 <body>
-	<sdpi-item label="Module">
-		<sdpi-select setting="moduleKey" placeholder="Select a module" datasource="getModules"
-			loading="Loading modules&hellip;" hot-reload></sdpi-select>
+	<p class="pi-hint">
+		Freely configurable dial: choose below what each gesture does. Value is the measurement of the sensor, Sensor the module of a station.
+	</p>
+
+	<sdpi-item label="Rotate">
+		<sdpi-select setting="dialRotate" default="value">
+			<option value="value">Value</option>
+			<option value="sensor">Sensor</option>
+			<option value="station">Station</option>
+			<option value="reload">Reload</option>
+			<option value="none">Nothing</option>
+		</sdpi-select>
 	</sdpi-item>
-	<p id="moduleListHint" class="pi-hint pi-hidden" role="status"></p>
-	<div class="pi-buttons">
-		<button id="manualModuleBtn" class="pi-button" type="button">Enter module by hand</button>
-	</div>
-	<div id="manualModuleItem" style="display:none;">
-		<sdpi-item label="Module key">
-			<sdpi-textfield id="manualModuleKey" setting="moduleKey" placeholder="station id|module id"></sdpi-textfield>
+	<sdpi-item label="Push and rotate">
+		<sdpi-select setting="dialPressRotate" default="station">
+			<option value="value">Value</option>
+			<option value="sensor">Sensor</option>
+			<option value="station">Station</option>
+			<option value="reload">Reload</option>
+			<option value="none">Nothing</option>
+		</sdpi-select>
+	</sdpi-item>
+	<sdpi-item label="Push">
+		<sdpi-select setting="dialPush" default="sensor">
+			<option value="value">Value</option>
+			<option value="sensor">Sensor</option>
+			<option value="station">Station</option>
+			<option value="reload">Reload</option>
+			<option value="none">Nothing</option>
+		</sdpi-select>
+	</sdpi-item>
+
+	<sdpi-item label="Focus">
+		<sdpi-checkbox setting="followFocus" label="Rotation changes the shared focus" default="true"></sdpi-checkbox>
+	</sdpi-item>
+	<p class="pi-hint">
+		Ticked: every key that follows the focus moves with the dial. Cleared: the dial changes only what it
+		shows itself; it then keeps its own sensor and value in its settings (choose the sensor below).
+	</p>
+
+	<div id="pinnedBlock">
+		<sdpi-item label="Module">
+			<sdpi-select setting="moduleKey" placeholder="Select a module" datasource="getModules"
+				loading="Loading modules&hellip;" hot-reload></sdpi-select>
 		</sdpi-item>
-		<p id="manualModuleHint" class="pi-hint pi-hidden"></p>
-		<p class="pi-hint">
-			Only needed when the list above stays empty. Both ids are the MAC addresses of the devices, written
-			as <code>station id|module id</code>, for example
-			<code>00:00:5e:00:53:01|00:00:5e:00:53:02</code>. Leave this empty and the key picks a module
-			that reports its measurement.
-		</p>
+		<p id="moduleListHint" class="pi-hint pi-hidden" role="status"></p>
+		<div class="pi-buttons">
+			<button id="manualModuleBtn" class="pi-button" type="button">Enter module by hand</button>
+		</div>
+		<div id="manualModuleItem" style="display:none;">
+			<sdpi-item label="Module key">
+				<sdpi-textfield id="manualModuleKey" setting="moduleKey" placeholder="station id|module id"></sdpi-textfield>
+			</sdpi-item>
+			<p id="manualModuleHint" class="pi-hint pi-hidden"></p>
+			<p class="pi-hint">
+				Only needed when the list above stays empty. Both ids are the MAC addresses of the devices, written
+				as <code>station id|module id</code>, for example
+				<code>00:00:5e:00:53:01|00:00:5e:00:53:02</code>. Leave this empty and the key picks a module
+				that reports its measurement.
+			</p>
+		</div>
 	</div>
 
-	<sdpi-item label="Follow focus">
-		<sdpi-checkbox setting="followFocus" label="Follow the focus" default="true"></sdpi-checkbox>
-	</sdpi-item>
 	<p class="pi-hint">
-		Ticked: the dial shows the plugin-wide focus. Cleared: it keeps its own module (chosen above) and
-		the gestures below move only this dial.
-	</p>
-	<p class="pi-hint">
-		Rotate: next value. Push: next sensor. Push and rotate: next station. Tap the touch strip: reload.
-		Long touch: cycles value &rarr; minimum and maximum (temperature only) &rarr; 24 h mini history (where available) &rarr; value.
+		Tap the touch strip: reload. Long touch: cycles value &rarr; minimum and maximum (temperature only) &rarr; 24 h mini history (where available) &rarr; value.
 	</p>
 
 	<sdpi-item label="Units">

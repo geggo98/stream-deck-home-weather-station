@@ -17,7 +17,7 @@
 
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { ACTION_IDS, DIAL_SPEC, FOCUS_SPECS, KEYPAD_SPECS, catalogGlyphs, type ActionId } from "../src/actions/catalog.ts";
+import { ACTION_IDS, DIAL_SPECS, FOCUS_SPECS, KEYPAD_SPECS, catalogGlyphs, type ActionId } from "../src/actions/catalog.ts";
 import { GLYPH_NAMES } from "../src/render/glyph-names.ts";
 import { PLUGIN_DIR, PROJECT_ROOT } from "./lib/plugin-id.ts";
 
@@ -52,8 +52,7 @@ function placeholderKey(glyph: string): string {
 }
 
 function glyphOf(id: ActionId): string {
-	if (id === DIAL_SPEC.id) return DIAL_SPEC.glyph;
-	return (KEYPAD_SPECS.find((s) => s.id === id) ?? FOCUS_SPECS.find((s) => s.id === id)!).glyph;
+	return (KEYPAD_SPECS.find((s) => s.id === id) ?? FOCUS_SPECS.find((s) => s.id === id) ?? DIAL_SPECS.find((s) => s.id === id)!).glyph;
 }
 
 let written = 0;

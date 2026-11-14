@@ -332,10 +332,60 @@
       "PropertyInspectorPath": "ui/history.html"
     },
     {
-      "Name": "Weather Dial",
+      "Name": "Sensor Dial",
+      "UUID": "de.schwetschke.sd.home-weather-station.weather-dial-sensor",
+      "Icon": "imgs/actions/weather-dial-sensor/icon",
+      "Tooltip": "Turn for the next sensor, turn while pressed for the next station, press to request fresh data. Shows the value you choose in its settings for the sensor it points at. The switch decides what a turn changes: the shared focus (all following keys move too) or only what this dial shows. Tap the strip to request fresh data (at most once a minute), hold it for minimum and maximum or the 24 hour history.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "PropertyInspectorPath": "ui/dial-sensor.html",
+      "States": [
+        {
+          "Image": "imgs/actions/weather-dial-sensor/key",
+          "TitleAlignment": "bottom"
+        }
+      ],
+      "Encoder": {
+        "layout": "$B1",
+        "Icon": "imgs/actions/weather-dial-sensor/icon",
+        "TriggerDescription": {
+          "Push": "Reload (once a minute at most)",
+          "Rotate": "Next sensor (pressed: next station)",
+          "Touch": "Tap: reload (once a minute at most), hold: min/max or history"
+        }
+      }
+    },
+    {
+      "Name": "Value Dial",
+      "UUID": "de.schwetschke.sd.home-weather-station.weather-dial-value",
+      "Icon": "imgs/actions/weather-dial-value/icon",
+      "Tooltip": "Turn for the next value of the sensor, turn while pressed for the next sensor, press to request fresh data. The switch decides what a turn changes: the shared focus (all following keys move too) or only what this dial shows. Tap the strip to request fresh data (at most once a minute), hold it for minimum and maximum or the 24 hour history.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "PropertyInspectorPath": "ui/dial-value.html",
+      "States": [
+        {
+          "Image": "imgs/actions/weather-dial-value/key",
+          "TitleAlignment": "bottom"
+        }
+      ],
+      "Encoder": {
+        "layout": "$B1",
+        "Icon": "imgs/actions/weather-dial-value/icon",
+        "TriggerDescription": {
+          "Push": "Reload (once a minute at most)",
+          "Rotate": "Next value (pressed: next sensor)",
+          "Touch": "Tap: reload (once a minute at most), hold: min/max or history"
+        }
+      }
+    },
+    {
+      "Name": "Custom Dial",
       "UUID": "de.schwetschke.sd.home-weather-station.weather-dial",
       "Icon": "imgs/actions/weather-dial/icon",
-      "Tooltip": "Turn for the next value, press for the next sensor, turn while pressed for the next station. Tap the strip to request fresh data (at most once a minute), hold it for minimum and maximum or the 24 hour history.",
+      "Tooltip": "Freely configurable: choose what turn, turn while pressed and press do (value, sensor, station, reload or nothing). Default: turn for the next value, press for the next sensor, turn while pressed for the next station. The switch decides what a turn changes: the shared focus (all following keys move too) or only what this dial shows. Tap the strip to request fresh data (at most once a minute), hold it for minimum and maximum or the 24 hour history.",
       "Controllers": [
         "Encoder"
       ],
@@ -350,8 +400,8 @@
         "layout": "$B1",
         "Icon": "imgs/actions/weather-dial/icon",
         "TriggerDescription": {
-          "Push": "Next sensor",
-          "Rotate": "Next value (pressed: next station)",
+          "Push": "Configurable (default: next sensor)",
+          "Rotate": "Configurable (default: next value; pressed: next station)",
           "Touch": "Tap: reload (once a minute at most), hold: min/max or history"
         }
       }

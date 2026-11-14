@@ -15,7 +15,7 @@ import { test } from "node:test";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ui = join(root, "de.schwetschke.sd.home-weather-station.sdPlugin", "ui");
-const PAGES = ["measurement.html", "dial.html", "focus.html", "auto-rotate.html", "info.html", "history.html", "navigation.html", "sensor-focus.html"] as const;
+const PAGES = ["measurement.html", "dial.html", "focus.html", "auto-rotate.html", "info.html", "history.html", "navigation.html", "sensor-focus.html", "dial-sensor.html", "dial-value.html"] as const;
 
 const VOID = new Set(["meta", "link", "input", "br", "hr", "img", "area", "base", "col", "source", "wbr"]);
 
@@ -191,7 +191,7 @@ for (const page of PAGES) {
 test("every page carries a byte-identical account block (whitespace normalised)", () => {
 	const blocks = PAGES.map((p) => accountBlock(read(p)));
 	assert.ok(blocks[0] && blocks[0].length > 800, "account block suspiciously short");
-	assert.equal(blocks.length, 8);
+	assert.equal(blocks.length, 10);
 	for (const [i, b] of blocks.entries()) assert.equal(b, blocks[0], `${PAGES[i]} differs from ${PAGES[0]}`);
 });
 
@@ -211,12 +211,74 @@ test("measurement page offers module, metric, units, trend, min/max, big text an
 	assert.match(read("measurement.html"), /image text \(experimental\)/);
 });
 
-test("dial page has module, units and trend, and no metric dropdown", () => {
-	const list = tags(read("dial.html"));
-	const settings = new Set(list.filter((t) => "setting" in t.attrs).map((t) => t.attrs.setting));
-	assert.deepEqual([...settings].sort(), ["followFocus", "moduleKey", "showTrend", "unitSystem"]);
-	assert.ok(!list.some((t) => t.attrs.datasource === "getMetrics"), "the dial cycles metrics, it has no metric dropdown");
+const DIAL_PAGES = ["dial.html", "dial-sensor.html", "dial-value.html"] as const;
+const GESTURE_OPTIONS = ["value", "sensor", "station", "reload", "none"];
+
+/** The values of the <option> children of the select bound to `setting`, plus the markup of that select. */
+function selectOptions(page: string, setting: string): string[] {
+	const m = new RegExp(`<sdpi-select[^>]*setting="${setting}"[^>]*>([\\s\\S]*?)</sdpi-select>`).exec(read(page));
+	assert.ok(m, `${page}: no select for ${setting}`);
+	return [...(m[1] ?? "").matchAll(/<option value="([^"]*)"/g)].map((x) => x[1] as string);
+}
+
+test("dial pages: followFocus is a checkbox, default on, labelled, explained, picker inside #pinnedBlock", () => {
+	for (const page of DIAL_PAGES) {
+		const html = read(page);
+		const box = bound(page).get("followFocus");
+		assert.equal(box?.name, "sdpi-checkbox", page);
+		assert.equal(box?.attrs.default, "true", `${page}: dial default is ON`);
+		assert.equal(box?.attrs.label, "Rotation changes the shared focus", page);
+		const text = html.replace(/\s+/g, " ");
+		assert.match(text, /Ticked: every key that follows the focus moves with the dial\. Cleared: the dial changes only what it shows itself; it then keeps its own sensor and value in its settings/, page);
+		const block = /<div id="pinnedBlock">([\s\S]*?)\n\t<\/div>\n\n/.exec(html)?.[1] ?? "";
+		assert.ok(block.includes('setting="moduleKey"') && block.includes("manualModuleBtn"), `${page}: module picker inside #pinnedBlock`);
+		assert.ok(!block.includes('setting="followFocus"'), `${page}: the switch stays outside the hidden block`);
+		assert.ok(!/<sdpi-select[^>]*setting="moduleKey"[^>]*>[\s\S]*<div id="pinnedBlock">/.test(html), `${page}: picker before the block`);
+		assert.ok(html.includes("units") || html.includes('setting="unitSystem"'), page);
+		assert.equal(bound(page).get("unitSystem")?.attrs.default, "auto", page);
+		assert.ok(bound(page).has("showTrend"), page);
+	}
 });
+
+test("sensor dial page: metric from getMetrics defaulting to temperature, legend", () => {
+	const b = bound("dial-sensor.html");
+	assert.deepEqual([...b.keys()].sort(), ["followFocus", "metric", "moduleKey", "showTrend", "unitSystem"]);
+	assert.equal(b.get("metric")?.attrs.datasource, "getMetrics");
+	assert.equal(b.get("metric")?.attrs.default, "temperature");
+	assert.ok(!("hot-reload" in (b.get("metric")?.attrs ?? {})), "like Sensor Focus: no hot-reload");
+	assert.match(read("dial-sensor.html"), /<title>Sensor Dial Settings<\/title>/);
+	const text = read("dial-sensor.html").replace(/\s+/g, " ");
+	for (const p of ["Rotate: next sensor", "Push and rotate: next station", "Push: reload", "Tap the touch strip: reload", "Long touch: cycles value &rarr; minimum and maximum"]) {
+		assert.ok(text.includes(p), `sensor dial legend lacks "${p}"`);
+	}
+});
+
+test("value dial page: no metric select, legend", () => {
+	const b = bound("dial-value.html");
+	assert.deepEqual([...b.keys()].sort(), ["followFocus", "moduleKey", "showTrend", "unitSystem"]);
+	assert.ok(!tags(read("dial-value.html")).some((t) => t.attrs.datasource === "getMetrics"), "rotation chooses the value");
+	assert.match(read("dial-value.html"), /<title>Value Dial Settings<\/title>/);
+	const text = read("dial-value.html").replace(/\s+/g, " ");
+	for (const p of ["Rotate: next value", "Push and rotate: next sensor", "Push: reload", "Tap the touch strip: reload", "Long touch: cycles value &rarr; minimum and maximum"]) {
+		assert.ok(text.includes(p), `value dial legend lacks "${p}"`);
+	}
+});
+
+test("custom dial page: three gesture selects with the five options and today's defaults, tap/hold legend", () => {
+	const b = bound("dial.html");
+	assert.deepEqual([...b.keys()].sort(), ["dialPress" + "Rotate", "dialPush", "dialRotate", "followFocus", "moduleKey", "showTrend", "unitSystem"].sort());
+	for (const [key, def] of [["dialRotate", "value"], ["dialPressRotate", "station"], ["dialPush", "sensor"]] as const) {
+		assert.equal(b.get(key)?.name, "sdpi-select", key);
+		assert.equal(b.get(key)?.attrs.default, def, `${key} default is today's behaviour`);
+		assert.deepEqual(selectOptions("dial.html", key), GESTURE_OPTIONS, key);
+	}
+	assert.ok(!tags(read("dial.html")).some((t) => t.attrs.datasource === "getMetrics"), "no metric dropdown");
+	assert.match(read("dial.html"), /<title>Custom Dial Settings<\/title>/);
+	assert.match(read("dial.html"), /<option value="none">Nothing<\/option>/);
+	const text = read("dial.html").replace(/\s+/g, " ");
+	assert.ok(text.includes("Tap the touch strip: reload. Long touch: cycles value &rarr; minimum and maximum (temperature only) &rarr; 24 h mini history (where available) &rarr; value."));
+});
+
 
 /** Settings bound on a page, with their tag. */
 function bound(page: string): Map<string, Tag> {
@@ -260,19 +322,6 @@ test("PI pages: no brand word in headings or section titles", () => {
 			assert.ok(!/netatmo|elgato|corsair/i.test(m[2] ?? m[3] ?? ""), `${page}: brand word in heading "${m[0]}"`);
 		}
 	}
-});
-
-test("dial page: followFocus defaults to on and the gesture legend names every gesture", () => {
-	assert.equal(bound("dial.html").get("followFocus")?.attrs.default, "true");
-	const text = read("dial.html").replace(/\s+/g, " ");
-	for (const phrase of ["Rotate: next value", "Push: next sensor", "Push and rotate: next station", "Tap the touch strip: reload"]) {
-		assert.ok(text.includes(phrase), `dial legend lacks "${phrase}"`);
-	}
-	// dial-controller.ts: value -> min/max (temperature only) -> 24 h mini history (where available) -> value
-	assert.ok(
-		text.includes("Long touch: cycles value &rarr; minimum and maximum (temperature only) &rarr; 24 h mini history (where available) &rarr; value."),
-		"long-touch text must describe the real cycle",
-	);
 });
 
 test("focus page: units, trend, min/max, no alert fields, no module or metric pickers, explains the navigation keys", () => {
@@ -357,6 +406,9 @@ test("page init scripts exist for every page and name the right initialisers", (
 		["navigation", ["initAccount"]],
 		["history", ["initModulePicker", "initFollowToggle", "initAccount"]],
 		["sensor-focus", ["initModulePicker", "initAccount"]],
+		["dial", ["initModulePicker", "initFollowToggle", "initAccount"]],
+		["dial-sensor", ["initModulePicker", "initFollowToggle", "initAccount"]],
+		["dial-value", ["initModulePicker", "initFollowToggle", "initAccount"]],
 	] as const) {
 		const js = readFileSync(join(ui, "init", `${name}.js`), "utf8");
 		for (const fn of expected) assert.ok(js.includes(`HomeWeatherPI.${fn}()`), `${name}.js lacks ${fn}`);

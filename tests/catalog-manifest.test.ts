@@ -10,7 +10,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { ACTION_IDS, catalogGlyphs, DIAL_SPEC, FOCUS_SPECS, KEYPAD_SPECS, PLUGIN_ID, uuidFor } from "../src/actions/catalog.ts";
+import { ACTION_IDS, catalogGlyphs, DIAL_SPEC, DIAL_SPECS, FOCUS_SPECS, KEYPAD_SPECS, PLUGIN_ID, uuidFor } from "../src/actions/catalog.ts";
 import { GLYPH_NAMES } from "../src/render/glyph-names.ts";
 import { GLYPHS } from "../src/render/generated/glyphs.ts";
 import { buildManifest, serialiseManifest, type Manifest } from "../scripts/lib/manifest.ts";
@@ -66,10 +66,24 @@ describe("manifest drift", () => {
 			assert.equal(a.PropertyInspectorPath, "propertyInspector" in spec ? spec.propertyInspector : undefined, spec.id);
 			assert.equal(a.Encoder, undefined);
 		}
-		const dial = committed.Actions.find((x) => x.UUID === uuidFor(DIAL_SPEC.id))!;
-		assert.deepEqual(dial.Controllers, ["Encoder"]);
-		assert.equal(dial.PropertyInspectorPath, "ui/dial.html");
-		assert.equal(dial.Encoder?.layout, "$B1");
+		assert.equal(DIAL_SPECS.length, 3);
+		for (const spec of DIAL_SPECS) {
+			const dial = committed.Actions.find((x) => x.UUID === uuidFor(spec.id))!;
+			assert.deepEqual(dial.Controllers, ["Encoder"], spec.id);
+			assert.equal(dial.PropertyInspectorPath, spec.propertyInspector, spec.id);
+			assert.equal(dial.Encoder?.layout, "$B1", spec.id);
+			assert.deepEqual(dial.Encoder?.TriggerDescription, spec.trigger, spec.id);
+		}
+		assert.deepEqual(
+			DIAL_SPECS.map((s) => [s.id, s.name, s.propertyInspector]),
+			[
+				["weather-dial-sensor", "Sensor Dial", "ui/dial-sensor.html"],
+				["weather-dial-value", "Value Dial", "ui/dial-value.html"],
+				["weather-dial", "Custom Dial", "ui/dial.html"],
+			],
+		);
+		assert.equal(uuidFor("weather-dial"), `${PLUGIN_ID}.weather-dial`, "the Custom Dial keeps the original UUID");
+		assert.equal(new Set(DIAL_SPECS.map((s) => s.glyph)).size, 3, "three distinct glyphs");
 	});
 });
 
@@ -78,7 +92,7 @@ describe("every catalog UUID is registered in code", () => {
 
 	it("has an @action decorator for each catalog id and none for anything else", () => {
 		const decorated = [...actionSources.matchAll(/@action\(\{\s*UUID:\s*uuidFor\(([^)]*)\)/g)].map((m) => m[1]!.trim());
-		const expected = [...KEYPAD_SPECS.map((s) => JSON.stringify(s.id)), ...FOCUS_SPECS.map((s) => JSON.stringify(s.id)), "DIAL_SPEC.id"];
+		const expected = [...KEYPAD_SPECS.map((s) => JSON.stringify(s.id)), ...FOCUS_SPECS.map((s) => JSON.stringify(s.id)), ...DIAL_SPECS.map((s) => JSON.stringify(s.id))];
 		assert.deepEqual([...decorated].sort(), [...expected].sort());
 		assert.equal(decorated.length, ACTION_IDS.length);
 	});
@@ -91,17 +105,31 @@ describe("every catalog UUID is registered in code", () => {
 		assert.deepEqual([...created].sort(), [...classes].sort());
 	});
 
+	it("each dial has its own thin class with a literal id and the matching mode", () => {
+		const files: Array<[string, string, string, string]> = [
+			["weather-dial-sensor.ts", "weather-dial-sensor", "SensorDialAction", "sensor"],
+			["weather-dial-value.ts", "weather-dial-value", "ValueDialAction", "value"],
+			["weather-dial.ts", "weather-dial", "WeatherDialAction", "custom"],
+		];
+		for (const [file, id, cls, mode] of files) {
+			const text = readFileSync(join(ROOT, "src/actions", file), "utf-8");
+			assert.match(text, new RegExp(`@action\\(\\{ UUID: uuidFor\\("${id}"\\) \\}\\)\\s*export class ${cls} extends DialActionBase`), file);
+			assert.match(text, new RegExp(`mode = "${mode}"`), file);
+			assert.equal(DIAL_SPECS.find((d) => d.id === id)?.mode, mode, id);
+		}
+	});
+
 	it("never hard-codes the plugin id outside the catalog", () => {
 		for (const file of readdirSync(join(ROOT, "src/actions")).filter((f) => f.endsWith(".ts") && f !== "catalog.ts")) {
 			assert.equal(readFileSync(join(ROOT, "src/actions", file), "utf-8").includes(PLUGIN_ID), false, file);
 		}
 	});
 
-	it("plugin.ts registers the dial and every keypad action", () => {
+	it("plugin.ts registers the three dials and every keypad action", () => {
 		const plugin = readFileSync(join(ROOT, "src/plugin.ts"), "utf-8");
 		assert.match(plugin, /createKeypadActions\(\)/);
 		assert.match(plugin, /createFocusActions\(\)/);
-		assert.match(plugin, /new WeatherDialAction\(\)/);
+		for (const cls of ["WeatherDialAction", "SensorDialAction", "ValueDialAction"]) assert.match(plugin, new RegExp(`new ${cls}\\(\\)`), cls);
 	});
 });
 
@@ -138,12 +166,12 @@ describe("the sensor focus action", () => {
 		assert.deepEqual(entry.Controllers, ["Keypad"]);
 	});
 
-	it("uses a glyph of its own and the catalog has 20 actions", () => {
-		const others = [...KEYPAD_SPECS, ...FOCUS_SPECS, DIAL_SPEC].filter((s) => s.id !== "focus-sensor").map((s): string => s.glyph);
+	it("uses a glyph of its own and the catalog has 22 actions", () => {
+		const others = [...KEYPAD_SPECS, ...FOCUS_SPECS, ...DIAL_SPECS].filter((s) => s.id !== "focus-sensor").map((s): string => s.glyph);
 		assert.ok(spec && !others.includes(spec.glyph), "no other action draws the same glyph");
 		assert.ok(spec.glyph in GLYPHS);
-		assert.equal(ACTION_IDS.length, 20);
-		assert.equal(committed.Actions.length, 20);
+		assert.equal(ACTION_IDS.length, 22);
+		assert.equal(committed.Actions.length, 22);
 	});
 
 	it("says what sets it apart from the focus display, in the catalog and the manifest", () => {

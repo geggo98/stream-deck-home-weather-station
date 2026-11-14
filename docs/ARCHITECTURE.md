@@ -203,7 +203,11 @@ pressure, rain, wind) stay as fixed-binding keys.
 | `auto-rotate` | Toggle; advances the focus through the metrics of the focused module every N seconds (setting, default 8, range 3..60). Off at plugin start unless "start on" is ticked. The timer exists only while the key is visible and on. |
 | `info` | Manifest name "Data Age and Battery". Cycles data age and battery level of the focused module (`infoPages()` in `src/render/nav-view.ts`: `age`, `battery`). There is no radio-signal page and the adapter model has no signal field. Uses snapshot data only. |
 | `history` | 24 h history: cycles 6 h / 24 h / 3 d; sparkline of the focused (or, per setting, a fixed) module and metric. |
-| `weather-dial` (dial) | See "Dial mapping". Follows the focus or its own pinned module (`followFocus`, default true). |
+| `weather-dial-sensor` (dial) | Manifest name "Sensor Dial". Rotate = next / previous sensor, pushed rotate = station, push = reload. Shows the metric of its own settings (default temperature). Page `ui/dial-sensor.html`. |
+| `weather-dial-value` (dial) | Manifest name "Value Dial". Rotate = next / previous value, pushed rotate = sensor, push = reload. Page `ui/dial-value.html`. |
+| `weather-dial` (dial) | Manifest name "Custom Dial" (the UUID is unchanged so existing profiles keep working). Gestures from the settings `dialRotate`, `dialPressRotate`, `dialPush`. Page `ui/dial.html`. |
+
+All three share one controller and the switch `followFocus` (default true); see "Dial mapping". 22 actions in total.
 
 Every measurement key has the settings `followFocus`, `alertAbove` and `alertBelow`. Follow
 semantics of the key controller (`effective()` in `src/actions/key-controller.ts`):
@@ -214,18 +218,18 @@ semantics of the key controller (`effective()` in `src/actions/key-controller.ts
   `label` (`effective()` strips it) so the key shows the followed module's name, and its
   `No data` face carries that name as a second line (`followed` in `buildKeyView`).
 * `focus` (Focus Display) follows sensor AND metric and ignores alerts.
-* `history` and `weather-dial` follow the whole focus by default (`followFocus` default true);
-  off pins them to their own module and metric.
-* Known limitation: `nextModule` (Next/Previous Sensor, dial push) skips modules that do not
-  report the FOCUS's metric, not the key's own. A `focus-sensor` key (or a fixed key with
+* `history` follows the whole focus by default (`followFocus` default true); off pins it to its own module and metric.
+* The dials: `weather-dial-sensor` with `followFocus` on follows the focus's station and sensor and keeps its own metric (like `focus-sensor`); `weather-dial-value` and `weather-dial` follow the whole focus. With `followFocus` off all three show their own `moduleKey` (adopted on first use) and `metric`.
+* Known limitation: `nextModule` (Next/Previous Sensor keys) skips modules that do not
+  report the FOCUS's metric, not the key's own. The Sensor Dial is exempt: it calls `nextModule` with ITS OWN metric, so a rain or wind Sensor Dial reaches those modules. When it writes to the focus it keeps the focus's metric if the target module reports it, else it sets the dial's metric. A `focus-sensor` key (or a fixed key with
   `followFocus`) showing a metric the focus does not share therefore cannot reach every
   module: from a temperature focus the rain gauge and anemometer are never visited.
   `nextMetric` only cycles the metrics the focused module reports, so changing the metric
   helps only for modules that share one with it; a module sharing none (rain, wind) can only
-  be shown by a fixed, unfollowing key. Not a data bug; a fix would need navigation that
+  be shown by a fixed, unfollowing key. Not a data bug; for keys a fix would need navigation that
   steps over the key's metric (not implemented).
-* Sensor and station navigation (keys, dial push and push-rotate) move the sensor focus;
-  next/previous metric (keys, dial rotation) move the metric focus.
+* Sensor and station navigation (keys, and the dials' sensor and station gestures with `followFocus` on) move the sensor focus;
+  next/previous metric (keys, the dials' value gesture) move the metric focus.
 
 ### Alerts
 
@@ -235,15 +239,19 @@ accessibility risk and was left out.
 
 ### Dial mapping
 
-| Gesture | Effect |
-|---|---|
-| rotate | next / previous value (`nextMetric`) |
-| push | next sensor (`nextModule(+1)`) |
-| rotate while pushed | next / previous station (`nextStation`) |
-| touch tap | reload (rate-limited) |
-| long touch | toggle min/max (temperature) / 24 h mini history on the strip |
+| Gesture | Sensor Dial | Value Dial | Custom Dial (defaults) |
+|---|---|---|---|
+| rotate | next / previous sensor (`nextModule` with the dial's own metric) | next / previous value (`nextMetric`) | `dialRotate`: value |
+| rotate while pushed | next / previous station (`nextStation`) | next / previous sensor | `dialPressRotate`: station |
+| push | reload (rate-limited) | reload (rate-limited) | `dialPush`: sensor |
+| touch tap | reload (rate-limited) | reload (rate-limited) | reload (rate-limited) |
+| long touch | cycle value, min/max (temperature), 24 h mini history on the strip | same | same |
 
-A pinned dial (`followFocus` false) changes only its own state, not the focus.
+The Custom Dial's settings take `value`, `sensor`, `station`, `reload` or `none` (`DialGesture` in `src/pi-protocol.ts`).
+
+The switch `followFocus` (default true) decides what a rotation changes: true writes to the shared focus (all following keys move too), false changes only the dial's own state (`moduleKey`, `metric`, written after a short quiet period, never touching the focus). Sensor Dial navigation uses the dial's own metric to pick the next module; in focus scope the focus keeps its metric if the target module reports it, else the dial's metric is used.
+
+All three dials are UNVERIFIED on a real Stream Deck +; the Virtual Stream Deck may not offer dials.
 
 Behaviour on hardware (key flash, dial push-rotate, touch long press) is UNVERIFIED: no
 Stream Deck hardware was available.

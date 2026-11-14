@@ -1,7 +1,7 @@
 /** Pure navigation over the focus, with the two-station fixture. */
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
-import { nextMetric, nextModule, nextStation, parseFocus, resolveFocus, sameFocus, type Focus } from "../src/focus/navigate.ts";
+import { metricKeyOf, nextMetric, nextModule, nextModuleFor, nextStation, parseFocus, resolveFocus, sameFocus, type Focus } from "../src/focus/navigate.ts";
 import {
 	baseModule,
 	BASE_B_ID,
@@ -71,7 +71,7 @@ describe("nextMetric", () => {
 
 	it("starts from an end when the stored metric is not reported", () => {
 		const stale = { stationId: STATION_ID, moduleId: RAIN_ID, metric: "co2" };
-		assert.equal(nextMetric(two, stale, 1)!.focus.metric, "rain24h");
+		assert.equal(nextMetric(two, stale, 1)!.focus.metric, metricKeyOf("rain24h"));
 		assert.equal(nextMetric(two, stale, -1)!.focus.metric, "rain");
 	});
 });
@@ -161,5 +161,34 @@ describe("ids that contain the module key separator", () => {
 		assert.equal(parseFocus({ stationId: "a|b", moduleId: BASE_ID, metric: "temperature" }), undefined);
 		assert.equal(parseFocus({ stationId: STATION_ID, moduleId: "a|b", metric: "temperature" }), undefined);
 		assert.ok(parseFocus({ stationId: STATION_ID, moduleId: BASE_ID, metric: "temperature" }), "negative control");
+	});
+});
+
+describe("nextModuleFor: the next sensor by a metric of the caller's own", () => {
+	it("reaches the rain module from a focus on the base temperature, which nextModule cannot", () => {
+		assert.equal(nextModule(two, atBase, 1)?.focus.moduleId, OUTDOOR_ID, "foil: nextModule goes by the focus metric");
+		const result = nextModuleFor(two, atBase, "rain24h", 1)!;
+		assert.equal(result.blocked, false);
+		assert.deepEqual(result.focus, { stationId: STATION_ID, moduleId: RAIN_ID, metric: metricKeyOf("rain24h") });
+	});
+
+	it("keeps the focus's metric when the target module reports it, otherwise takes the caller's", () => {
+		assert.equal(nextModuleFor(two, atBase, "humidity", 1)?.focus.metric, "temperature", "outdoor reports temperature too");
+		assert.equal(nextModuleFor(two, atBase, "rain24h", 1)?.focus.metric, metricKeyOf("rain24h"));
+	});
+
+	it("goes both ways, wraps, and blocks when no other module has the metric", () => {
+		assert.equal(nextModuleFor(two, atBase, "humidity", -1)?.focus.moduleId, OUTDOOR_ID, "wraps backwards over wind and rain");
+		const atOutdoor: Focus = { ...atBase, moduleId: OUTDOOR_ID };
+		assert.equal(nextModuleFor(two, atOutdoor, "humidity", 1)?.focus.moduleId, BASE_ID);
+		const atRain: Focus = { ...atBase, moduleId: RAIN_ID, metric: metricKeyOf("rain24h") };
+		assert.equal(nextModuleFor(two, atRain, "rain24h", 1)?.blocked, true);
+		assert.equal(nextModuleFor(undefined, atBase, "humidity", 1), undefined);
+	});
+
+	it("from a module that lacks the metric it lands on the first one that has it", () => {
+		const atWind: Focus = { stationId: STATION_ID, moduleId: WIND_ID, metric: metricKeyOf("wind") };
+		assert.equal(nextModuleFor(two, atWind, "rain24h", 1)?.focus.moduleId, RAIN_ID);
+		assert.equal(nextModuleFor(two, atWind, "humidity", 1)?.focus.moduleId, BASE_ID);
 	});
 });

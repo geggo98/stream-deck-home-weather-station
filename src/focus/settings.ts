@@ -7,7 +7,7 @@
  */
 
 import type { HistoryWindow } from "../adapter/station/types.ts";
-import type { MeasurementSettings } from "../pi-protocol.ts";
+import type { DialGesture, MeasurementSettings } from "../pi-protocol.ts";
 
 /** Fields the focus family adds to a key or dial. Raw: what the Property Inspector wrote (text fields give strings), read through the accessors below. */
 export interface FocusSettings {
@@ -74,4 +74,11 @@ export function autoRotateSecondsOf(settings: FocusSettings | undefined): number
 	const v = numberOf(settings?.autoRotateSeconds);
 	if (v === undefined) return AUTO_ROTATE_DEFAULT_SECONDS;
 	return Math.max(AUTO_ROTATE_MIN_SECONDS, Math.min(AUTO_ROTATE_MAX_SECONDS, Math.round(v)));
+}
+
+export const DIAL_GESTURES: readonly DialGesture[] = ["value", "sensor", "station", "reload", "none"];
+
+/** One gesture setting of the Custom Dial, read defensively: anything that is not a known gesture gives the default. */
+export function dialGestureOf(value: unknown, defaultValue: DialGesture): DialGesture {
+	return DIAL_GESTURES.includes(value as DialGesture) ? (value as DialGesture) : defaultValue;
 }

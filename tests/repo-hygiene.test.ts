@@ -558,7 +558,7 @@ test("README states what reload can and cannot do", () => {
 	assert.match(readme, /cannot force the station to measure/);
 	assert.match(readme, /about every 10 minutes/);
 	// the names users see in the Stream Deck app (manifest Name), including the seven measurement keys
-	for (const word of ["Temperature, Humidity, CO2", "Focus Display", "Sensor Focus", "Reload", "Next Value", "Next Sensor", "Next Station", "Auto Rotate", "Data Age and Battery", "History", "Weather Dial"]) {
+	for (const word of ["Temperature, Humidity, CO2", "Focus Display", "Sensor Focus", "Reload", "Next Value", "Next Sensor", "Next Station", "Auto Rotate", "Data Age and Battery", "History", "Sensor Dial", "Value Dial", "Custom Dial"]) {
 		assert.ok(readme.includes(`| ${word}`), `README actions table lacks ${word}`);
 	}
 	// the follow rules are stated exactly (README and ARCHITECTURE)
@@ -566,7 +566,11 @@ test("README states what reload can and cannot do", () => {
 	assert.match(flat, /Focus Display follows sensor AND value/);
 	assert.match(flat, /Sensor Focus follows only the sensor/);
 	assert.match(flat, /a CO2 key stays a CO2 key/);
-	assert.match(flat, /History and Weather Dial follow the whole focus/);
+	assert.match(flat, /History follows the whole focus/);
+	assert.match(flat, /The three dials have the checkbox/);
+	assert.match(flat, /There are 22 actions in total/);
+	assert.doesNotMatch(readme, /\| Weather Dial/);
+	assert.match(flat, /UNVERIFIED on a real Stream Deck \+/);
 	const archFlat = readRoot("docs/ARCHITECTURE.md").replace(/\s+/g, " ");
 	assert.match(archFlat, /`focus-sensor`/);
 	assert.match(archFlat, /ignores the focus's metric/);
@@ -704,11 +708,12 @@ test("docs state the follow rules: No data names the sensor, the navigation limi
 	const flat = (f: string): string => readRoot(f).replace(/\s+/g, " ");
 	const readme = flat("README.md");
 	assert.match(readme, /says `No data` plus the sensor's name when the focused sensor does not measure the key's value/);
-	assert.match(readme, /Known limitation: Next\/Previous Sensor and the dial's push only visit sensors that report the focused value/);
+	assert.match(readme, /Known limitation: Next\/Previous Sensor keys only visit sensors that report the focused value/);
 	assert.match(readme, /not a problem with your station's data/);
 	assert.match(readme, /rain or wind module/);
+	assert.match(readme, /The Sensor Dial does not have this limitation: it chooses the next sensor with its own value/);
 	assert.match(readme, /Sensor Focus key says `Pick module` only while the focus has no module/);
-	assert.match(flat("docs/ARCHITECTURE.md"), /Known limitation: `nextModule`[^.]*skips modules that do not report the FOCUS's metric/);
+	assert.match(flat("docs/ARCHITECTURE.md"), /The Sensor Dial is exempt: it calls `nextModule` with ITS OWN metric/);
 	const publishing = flat("docs/PUBLISHING.md");
 	assert.match(publishing, /gh run rerun <run-id> --failed/);
 	assert.match(publishing, /the release stays without an asset until the job is repeated/);

@@ -155,6 +155,32 @@ export function nextModule(snapshot: StationSnapshot | undefined, stored: unknow
 	return { focus: resolved, blocked: true };
 }
 
+/**
+ * Next / previous module of the same station that reports `metric`, whatever metric the focus
+ * is on (the Sensor Dial moves by ITS OWN metric, so a rain or wind dial reaches the rain or
+ * wind module). The module the focus is on counts as a candidate too (last), so a station
+ * with one such module blocks, and a focus on a module that lacks the metric still lands on
+ * the first module that has it. The returned focus keeps the focus's metric when the target
+ * module reports it, else it takes `metric`.
+ */
+export function nextModuleFor(snapshot: StationSnapshot | undefined, stored: unknown, metric: DisplayMetricId, dir: Direction): NavResult | undefined {
+	const resolved = resolveFocus(snapshot, stored);
+	if (!snapshot || !resolved) return undefined;
+	const at = locate(snapshot, resolved);
+	if (!at) return { focus: resolved, blocked: true };
+	const modules = at.station.modules;
+	const start = modules.findIndex((m) => m.id === resolved.moduleId);
+	for (let step = 1; step <= modules.length; step++) {
+		const candidate = modules[wrap(start + dir * step, modules.length)]!;
+		if (!moduleReports(candidate.values, METRICS[metric])) continue;
+		if (candidate.id === resolved.moduleId) break;
+		const keep = displayMetricOf(resolved.metric);
+		const own = keep !== undefined && moduleReports(candidate.values, METRICS[keep]) ? resolved.metric : metricKeyOf(metric);
+		return { focus: { ...resolved, moduleId: candidate.id, metric: own }, blocked: false };
+	}
+	return { focus: resolved, blocked: true };
+}
+
 /** Next / previous station; lands on its base module, keeping the metric when the base reports it. */
 export function nextStation(snapshot: StationSnapshot | undefined, stored: unknown, dir: Direction): NavResult | undefined {
 	const resolved = resolveFocus(snapshot, stored);
