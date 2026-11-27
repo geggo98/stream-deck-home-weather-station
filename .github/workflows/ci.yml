@@ -36,7 +36,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Nix
-        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
         with:
           extra_nix_config: |
             accept-flake-config = true
@@ -85,7 +85,7 @@ jobs:
           fetch-depth: 0 # gitleaks scans the whole history
 
       - name: Install Nix
-        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
         with:
           extra_nix_config: |
             accept-flake-config = true
@@ -150,7 +150,7 @@ jobs:
           persist-credentials: false
 
       - name: Review dependency changes
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec # v5.0.1
         with:
           fail-on-severity: high
           comment-summary-in-pr: never
